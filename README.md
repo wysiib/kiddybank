@@ -63,7 +63,7 @@ How it fits together:
 
 - Interest and pocket money are computed lazily on each request. There is no scheduler or background job.
 - There is no migration tool: columns added later are added on startup (`models.ADDED_COLUMNS`), anything else (rename, drop) needs a manual migration or a fresh database.
-- Five wrong PINs lock a profile for five minutes and parent sessions expire after 15 idle minutes. The PIN still protects against siblings, not attackers. It is designed for a trusted family setting, not for real financial data.
+- Every five wrong PINs lock a profile, for 5 minutes, then 1 hour, then 24 hours, and parent sessions expire after 15 idle minutes. The PIN still protects against siblings, not attackers. It is designed for a trusted family setting, not for real financial data.
 - Service workers need HTTPS except on `localhost`, so serve it behind a TLS proxy if you want the PWA install on other devices.
 
 ## Contributing

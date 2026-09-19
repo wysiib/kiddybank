@@ -25,8 +25,8 @@ def _secret() -> str:
     return f.read_text()
 
 
-app = FastAPI()
-app.add_middleware(SessionMiddleware, secret_key=_secret(), same_site="lax", max_age=60 * 60 * 24 * 30)
+app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)  # no public map of the routes
+app.add_middleware(SessionMiddleware, secret_key=_secret(), same_site="lax", https_only=True, max_age=60 * 60 * 24 * 30)
 app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 for module in (login, banking, savings, parent):
     app.include_router(module.router)

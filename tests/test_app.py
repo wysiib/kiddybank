@@ -17,7 +17,7 @@ def client(tmp_path, monkeypatch):
     web._engine.cache_clear()
     clock = {"today": D0}
     main.app.dependency_overrides[web.get_today] = lambda: clock["today"]
-    c = TestClient(main.app, follow_redirects=False)
+    c = TestClient(main.app, base_url="https://testserver", follow_redirects=False)  # the cookie is Secure
     c.clock = clock
     yield c
     main.app.dependency_overrides.clear()
@@ -489,6 +489,22 @@ def test_wrong_pins_lock_the_account_for_a_while(family):
         assert s.get(User, 2).pin_failures == 0
 
 
+def test_lock_gets_longer_each_round(family):
+    for expected in auth.LOCKS + auth.LOCKS[-1:]:
+        for _ in range(auth.MAX_PIN_FAILURES):
+            login(family, 2, "0000")
+        with Session(web._engine()) as s:
+            u = s.get(User, 2)
+            assert abs(u.locked_until - datetime.now() - expected) < timedelta(seconds=5)
+            u.locked_until = None  # wait it out
+            s.commit()
+
+
+def test_docs_and_cookie_are_not_public(family):
+    assert family.get("/docs").status_code == 404 and family.get("/openapi.json").status_code == 404
+    assert "secure" in login(family, 2, "1111").headers["set-cookie"].lower()
+
+
 def test_kid_cannot_guess_the_parent_pin_at_the_cash_desk(family):
     login(family, 2, "1111")
     tok = token(family.post("/bar/einzahlen/pruefen", data={"cents": 500}))
@@ -542,7 +558,7 @@ def test_dauerauftrag_needs_a_real_kid(family):
 
 def test_failed_commit_is_an_error_not_a_lost_write_behind_a_success(family, monkeypatch):
     login(family, 1, "1234")
-    lenient = TestClient(main.app, raise_server_exceptions=False, follow_redirects=False)
+    lenient = TestClient(main.app, base_url="https://testserver", raise_server_exceptions=False, follow_redirects=False)
     lenient.cookies.update(family.cookies)
 
     def boom(self):
