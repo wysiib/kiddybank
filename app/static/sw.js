@@ -1,7 +1,7 @@
 // Cache-first for static assets, network-first for pages (last known balance works offline).
 // Never caches POSTs or HTMX partials, and drops all cached pages on logout and login so a shared tablet
 // can't show one kid's balance to the next.
-const ASSETS = "kb-assets-v7";
+const ASSETS = "kb-assets-v8";
 const PAGES = "kb-pages-v1";
 
 self.addEventListener("install", (e) => {
@@ -37,7 +37,11 @@ self.addEventListener("fetch", (e) => {
           fetch(req).then((res) => {
             if (res.ok) {
               const copy = res.clone();
-              caches.open(ASSETS).then((c) => c.put(req, copy));
+              caches.open(ASSETS).then(async (c) => {
+                // pages ask for /static/x?v=<mtime>: drop the older versions of the same file
+                for (const old of await c.keys()) if (new URL(old.url).pathname === url.pathname) await c.delete(old);
+                await c.put(req, copy);
+              });
             }
             return res;
           }),

@@ -22,8 +22,14 @@ BASE = Path(__file__).parent
 DB_URL = os.environ.get("KIDDYBANK_DB", "sqlite:///kiddybank.db")
 PARENT_IDLE = 15 * 60  # seconds; kids stay signed in for the cookie's 30 days, parents on a shared tablet must not
 
+def static_url(name: str) -> str:
+    """/static/<name>?v=<mtime>. The service worker serves /static cache-first, so a changed file must get a new URL."""
+    return f"/static/{name}?v={int((BASE / 'static' / name).stat().st_mtime)}"
+
+
 templates = Jinja2Templates(directory=BASE / "templates")
 templates.env.globals["t"] = t
+templates.env.globals["static_url"] = static_url
 templates.env.globals["locale"] = LOCALE
 templates.env.filters["money"] = format_money
 templates.env.filters["plain"] = format_plain

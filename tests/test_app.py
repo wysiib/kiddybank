@@ -479,3 +479,10 @@ def test_shared_template_pieces_render(family):
     login(family, 2, "1111")
     assert family.get("/login/1").text.count("data-key") == 11  # keypad macro: digits and backspace
     assert "Mein Konto" in family.get("/ueberweisen").text and "Mein Konto" in family.get("/bar/einzahlen").text
+
+
+def test_static_assets_are_versioned_so_the_cache_first_worker_cannot_go_stale(client):
+    page = client.get("/login").text
+    m = re.search(r'href="(/static/app\.css\?v=\d+)"', page)
+    assert m and re.search(r'src="/static/app\.js\?v=\d+"', page)
+    assert client.get(m.group(1)).status_code == 200

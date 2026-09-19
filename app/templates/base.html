@@ -8,9 +8,9 @@
   <link rel="icon" href="/static/icon-192.png">
   <link rel="apple-touch-icon" href="/static/icon-192.png">
   <title>{{ t('app.title') }}</title>
-  <link rel="stylesheet" href="/static/app.css">
-  <script src="/static/htmx.min.js" defer></script>
-  <script src="/static/app.js" defer></script>
+  <link rel="stylesheet" href="{{ static_url('app.css') }}">
+  <script src="{{ static_url('htmx.min.js') }}" defer></script>
+  <script src="{{ static_url('app.js') }}" defer></script>
 </head>
 <body class="min-h-screen bg-amber-50 text-xl text-slate-800">
   {% if user is defined and user %}
