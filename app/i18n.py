@@ -18,7 +18,6 @@ STRINGS = {
         "login.who": "Wer bist du?",
         "login.pin": "Dein Geheim-Code",
         "login.pin.wrong": "Oh nein, das war nicht dein Code. Versuch es noch einmal!",
-        "login.parent": "Eltern",
         "setup.title": "Willkommen bei der Kinderbank!",
         "setup.intro": "Lege zuerst das Eltern-Konto an.",
         "setup.name": "Name",
@@ -31,11 +30,9 @@ STRINGS = {
         "acct.festgeld": "Schatztruhe",
         "acct.festgeld.sub": "Festgeld",
         "home.transfer": "Überweisen",
-        "home.statement": "Kontoauszug",
         "home.interest": "{when} bekommst du etwa {amount} Zinsen.",
         "home.interest.days": "In {days} Tagen",
         "home.interest.tomorrow": "Morgen",
-        "home.no_balance": "Noch nichts drin",
         "week.title": "Deine Woche",
         "week.dauerauftrag": "Taschengeld",
         "week.zins": "Zinsen",
@@ -68,7 +65,6 @@ STRINGS = {
 
         # transfer
         "xfer.title": "Überweisen",
-        "xfer.from": "Von wo?",
         "xfer.to": "An wen?",
         "xfer.amount": "Wie viel?",
         "xfer.reset": "Auf null",
