@@ -127,3 +127,12 @@ def test_parent_configures_rates_and_kid_opens_two_deposits(family):
     login(family, 2, "1111")
     assert "Turbo" not in offers() and "Kurz" in offers()
     assert "Turbo" in family.get("/festgeld").text  # still shown on the deposit card
+
+
+def test_parent_changes_avatar(family):
+    family.post("/eltern/kinder/2/module", data={"avatar": "🐼"})
+    with Session(main._engine()) as s:
+        assert s.get(main.User, 2).avatar == "🐼"
+    family.post("/eltern/kinder/2/module", data={"avatar": "not-an-avatar"})  # unknown values are ignored
+    with Session(main._engine()) as s:
+        assert s.get(main.User, 2).avatar == "🐼"

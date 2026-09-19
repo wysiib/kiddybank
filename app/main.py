@@ -405,11 +405,13 @@ def add_kid(request: Request, name: str = Form(...), pin: str = Form(...), avata
 
 @app.post("/eltern/kinder/{uid}/module")
 def set_modules(uid: int, festgeld: str | None = Form(None), stocks: str | None = Form(None),
-                user: User = Depends(parent), s: Session = Depends(get_session)):
+                avatar: str = Form(""), user: User = Depends(parent), s: Session = Depends(get_session)):
     k = s.get(User, uid)
     if not k or k.role != "child":
         raise HTTPException(404)
     k.festgeld_enabled, k.stocks_enabled = festgeld is not None, stocks is not None
+    if avatar in AVATARS:
+        k.avatar = avatar
     return redirect("/eltern")
 
 

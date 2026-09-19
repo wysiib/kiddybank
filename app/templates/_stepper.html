@@ -1,6 +1,6 @@
 {% macro stepper(name="cents") %}
 <div class="card space-y-4 text-center" data-stepper>
-  <div class="text-5xl font-extrabold" data-display>{{ 0|money }}</div>
+  <input class="w-full bg-transparent text-center text-5xl font-extrabold" inputmode="decimal" value="{{ 0|money }}" aria-label="{{ t('xfer.amount') }}" data-display>
   <input type="hidden" name="{{ name }}" value="0" data-value>
   <div class="grid grid-cols-3 gap-2">
     {% for n in [50, 100, 500, 1000, 2000] %}

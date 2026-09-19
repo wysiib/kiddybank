@@ -6,9 +6,10 @@ document.addEventListener("click", (e) => {
     const value = box.querySelector("[data-value]");
     const cents = b.hasAttribute("data-reset") ? 0 : +value.value + +b.dataset.add;
     value.value = cents;
-    box.querySelector("[data-display]").textContent = (cents / 100).toLocaleString(document.documentElement.lang, {
+    box.querySelector("[data-display]").value = (cents / 100).toLocaleString(document.documentElement.lang, {
       style: "currency",
       currency: "EUR",
+      useGrouping: false,
     });
     value.dispatchEvent(new Event("change", { bubbles: true }));
     return;
@@ -24,3 +25,13 @@ document.addEventListener("click", (e) => {
     if (pin.value.length === 4) form.submit();
   }
 });
+
+// Typing an amount works too: keep the hidden cents field in sync.
+document.addEventListener("input", (e) => {
+  const d = e.target.closest("[data-display]");
+  if (!d) return;
+  const value = d.closest("[data-stepper]").querySelector("[data-value]");
+  value.value = Math.round(parseFloat(d.value.replace(/[^\d.,]/g, "").replace(",", ".")) * 100) || 0;
+  value.dispatchEvent(new Event("change", { bubbles: true }));
+});
+document.addEventListener("focusin", (e) => e.target.matches("[data-display]") && e.target.select());
