@@ -469,3 +469,13 @@ def test_failed_commit_is_an_error_not_a_lost_write_behind_a_success(family, mon
     monkeypatch.setattr(Session, "commit", boom)
     r = lenient.post("/eltern/buchen", data={"account_id": account_id(2, "giro"), "amount": "5,00"})
     assert r.status_code == 500  # the client must not be told "done" before the commit happened
+
+
+def test_shared_template_pieces_render(family):
+    login(family, 1, "1234")
+    page = family.get("/eltern").text
+    assert page.count('name="avatar"') == 20 and 'value="🦊" class="sr-only" checked' in page  # Mia's picker + the add-kid picker
+    assert 'name="festgeld" checked' in page and page.count('name="stocks"') == 2
+    login(family, 2, "1111")
+    assert family.get("/login/1").text.count("data-key") == 11  # keypad macro: digits and backspace
+    assert "Mein Konto" in family.get("/ueberweisen").text and "Mein Konto" in family.get("/bar/einzahlen").text

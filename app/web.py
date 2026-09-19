@@ -14,7 +14,7 @@ from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select
 
 from . import ledger
-from .i18n import LOCALE, format_date, format_money, format_percent, t
+from .i18n import LOCALE, format_date, format_money, format_percent, format_plain, t
 from .ledger import LedgerError
 from .models import Account, User, make_engine
 
@@ -26,6 +26,7 @@ templates = Jinja2Templates(directory=BASE / "templates")
 templates.env.globals["t"] = t
 templates.env.globals["locale"] = LOCALE
 templates.env.filters["money"] = format_money
+templates.env.filters["plain"] = format_plain
 templates.env.filters["date"] = format_date
 templates.env.filters["pct"] = format_percent
 templates.env.filters["per"] = lambda bp, days: format_percent(ledger.period_bp(bp, days))  # annual bp -> "per week/month/year"

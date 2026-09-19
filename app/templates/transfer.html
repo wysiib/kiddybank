@@ -1,8 +1,9 @@
 {% extends "base.html" %}
 {% from "_stepper.html" import stepper %}
+{% from "_giro.html" import giro_card %}
 {% block content %}
 <h1 class="text-3xl font-extrabold">💸 {{ t('xfer.title') }}</h1>
-<p class="card text-center text-base text-slate-500">👛 {{ t('acct.giro') }}: <span class="text-2xl font-extrabold text-slate-800">{{ giro.balance_cents|money }}</span></p>
+{{ giro_card(giro) }}
 {% if error %}<p class="error">{{ t(error) }}</p>{% endif %}
 <form method="post" action="/ueberweisen/pruefen" class="space-y-6">
   <section class="space-y-3">

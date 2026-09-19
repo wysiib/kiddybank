@@ -1,0 +1,3 @@
+{% macro giro_card(giro) %}
+<p class="card text-center text-base text-slate-500">👛 {{ t('acct.giro') }}: <span class="text-2xl font-extrabold text-slate-800">{{ giro.balance_cents|money }}</span></p>
+{% endmacro %}

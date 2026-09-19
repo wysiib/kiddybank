@@ -3,6 +3,25 @@
 {% macro period_select(selected) %}
 <select class="input" name="period">{% for d in periods %}<option value="{{ d }}" {{ 'selected' if d == selected }}>{{ t('per.' ~ d) }}</option>{% endfor %}</select>
 {% endmacro %}
+{% macro avatar_picker(selected, size) %}
+<div class="flex flex-wrap gap-2">
+  {% for a in avatars %}
+  <label class="choice rounded-2xl bg-white p-2 {{ size }} shadow"><input type="radio" name="avatar" value="{{ a }}" class="sr-only" {{ 'checked' if a == selected }}>{{ a }}</label>
+  {% endfor %}
+</div>
+{% endmacro %}
+{% macro rate_row(bp, days) %}
+<div class="flex w-full gap-2">
+  <label class="block flex-1">{{ t('par.rate') }}
+    <input class="input" name="rate" inputmode="decimal" value="{{ bp|per(days) }}" required>
+  </label>
+  <label class="block w-40">&nbsp;{{ period_select(days) }}</label>
+</div>
+{% endmacro %}
+{% macro module_boxes(festgeld, stocks) %}
+<label class="flex items-center gap-2"><input type="checkbox" name="festgeld" {{ 'checked' if festgeld }}> {{ t('par.module.festgeld') }}</label>
+<label class="flex items-center gap-2"><input type="checkbox" name="stocks" {{ 'checked' if stocks }}> {{ t('par.module.stocks') }}</label>
+{% endmacro %}
 {% block content %}
 <h1 class="text-3xl font-extrabold">{{ user.avatar }} {{ t('par.title') }}</h1>
 {% if error %}<p class="error">{{ t(error) }}</p>{% endif %}
@@ -14,20 +33,10 @@
     <div class="flex items-center gap-4"><span class="text-4xl">{{ k.avatar }}</span><span class="flex-1 font-bold">{{ k.name }}</span><a href="/eltern/kinder/{{ k.id }}/konto" class="btn btn-alt">📒 {{ t('stmt.title') }}</a></div>
     <form method="post" action="/eltern/kinder/{{ k.id }}" class="flex flex-wrap items-center gap-4">
       {% set g = giros[k.id] %}
-      <div class="flex w-full gap-2">
-        <label class="block flex-1">{{ t('par.rate') }}
-          <input class="input" name="rate" inputmode="decimal" value="{{ g.interest_rate_bp|per(g.payout_days) }}" required>
-        </label>
-        <label class="block w-40">&nbsp;{{ period_select(g.payout_days) }}</label>
-      </div>
+      {{ rate_row(g.interest_rate_bp, g.payout_days) }}
       <p class="lesson w-full">{{ t('par.rate.hint') }} {{ t('par.rate.annual', pct=g.interest_rate_bp|pct) }}</p>
-      <div class="flex w-full flex-wrap gap-2">
-        {% for a in avatars %}
-        <label class="choice rounded-2xl bg-white p-2 text-3xl shadow"><input type="radio" name="avatar" value="{{ a }}" class="sr-only" {{ 'checked' if a == k.avatar }}>{{ a }}</label>
-        {% endfor %}
-      </div>
-      <label class="flex items-center gap-2"><input type="checkbox" name="festgeld" {{ 'checked' if k.festgeld_enabled }}> {{ t('par.module.festgeld') }}</label>
-      <label class="flex items-center gap-2"><input type="checkbox" name="stocks" {{ 'checked' if k.stocks_enabled }}> {{ t('par.module.stocks') }}</label>
+      <div class="w-full">{{ avatar_picker(k.avatar, 'text-3xl') }}</div>
+      {{ module_boxes(k.festgeld_enabled, k.stocks_enabled) }}
       <button class="btn btn-alt">{{ t('app.save') }}</button>
     </form>
     {% if goals[k.id] %}
@@ -50,20 +59,10 @@
     <h3 class="font-bold">{{ t('par.add_kid') }}</h3>
     <label class="block">{{ t('par.name') }}<input class="input" name="name" required></label>
     <label class="block">{{ t('par.pin') }}<input class="input" name="pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" required></label>
-    <div class="flex gap-2">
-      <label class="block flex-1">{{ t('par.rate') }}<input class="input" name="rate" inputmode="decimal" value="{{ default_rate|per(default_days) }}" required></label>
-      <label class="block w-40">&nbsp;{{ period_select(default_days) }}</label>
-    </div>
+    {{ rate_row(default_rate, default_days) }}
     <p class="lesson">{{ t('par.rate.hint') }}</p>
-    <div>{{ t('par.avatar') }}
-      <div class="flex flex-wrap gap-2">
-        {% for a in avatars %}
-        <label class="choice rounded-2xl bg-white p-2 text-4xl shadow"><input type="radio" name="avatar" value="{{ a }}" class="sr-only" {{ 'checked' if loop.first }}>{{ a }}</label>
-        {% endfor %}
-      </div>
-    </div>
-    <label class="flex items-center gap-2"><input type="checkbox" name="festgeld" checked> {{ t('par.module.festgeld') }}</label>
-    <label class="flex items-center gap-2"><input type="checkbox" name="stocks" checked> {{ t('par.module.stocks') }}</label>
+    <div>{{ t('par.avatar') }}{{ avatar_picker(avatars[0], 'text-4xl') }}</div>
+    {{ module_boxes(true, true) }}
     <button class="btn">{{ t('par.add_kid') }}</button>
   </form>
 </section>
@@ -124,7 +123,7 @@
     <details>
       <summary class="cursor-pointer font-bold">{{ t('par.rule.edit') }}</summary>
       <form method="post" action="/eltern/dauerauftrag/{{ r.rule.id }}" class="rule-form mt-3 space-y-3">
-        <label class="block">{{ t('par.rule.amount') }}<input class="input" name="amount" inputmode="decimal" required value="{{ '%d,%02d'|format(r.rule.amount_cents // 100, r.rule.amount_cents % 100) }}"></label>
+        <label class="block">{{ t('par.rule.amount') }}<input class="input" name="amount" inputmode="decimal" required value="{{ r.rule.amount_cents|plain }}"></label>
         {{ rule_fields(r.rule.interval, r.rule.next_run.weekday(), r.rule.next_run.day) }}
         <button class="btn">{{ t('par.rule.save') }}</button>
       </form>

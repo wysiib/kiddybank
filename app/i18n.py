@@ -216,6 +216,12 @@ def format_money(cents: int) -> str:
     return f"{sign}{euros:,}".replace(",", ".") + f",{rest:02d} €"
 
 
+def format_plain(cents: int) -> str:
+    """'3,50': what a parent types into an amount field (no currency sign, no thousands dots)."""
+    euros, rest = divmod(abs(cents), 100)
+    return f"{'-' if cents < 0 else ''}{euros},{rest:02d}"
+
+
 def format_percent(bp: int, unit: str = "") -> str:
     """Basis points -> '2,5' (German decimal comma), optionally followed by a unit."""
     text = f"{bp / 100:g}".replace(".", ",")

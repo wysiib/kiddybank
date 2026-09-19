@@ -1,0 +1,14 @@
+{# PIN dots and keypad; app.js fills the form's hidden name="pin" and submits after 4 digits. #}
+{% macro keypad(back, shake=False) %}
+<div class="flex justify-center gap-4 {{ 'shake' if shake }}">
+  {% for _ in range(4) %}<span data-dot class="h-8 w-8 rounded-full border-4 border-pink-500"></span>{% endfor %}
+</div>
+<div class="mx-auto grid max-w-xs grid-cols-3 gap-3">
+  {% for k in [1,2,3,4,5,6,7,8,9] %}
+  <button type="button" data-key="{{ k }}" class="tile min-h-20 text-3xl">{{ k }}</button>
+  {% endfor %}
+  <a href="{{ back }}" class="tile min-h-20 text-3xl" aria-label="{{ t('app.back') }}">↩️</a>
+  <button type="button" data-key="0" class="tile min-h-20 text-3xl">0</button>
+  <button type="button" data-key="back" class="tile min-h-20 text-3xl" aria-label="⌫">⌫</button>
+</div>
+{% endmacro %}
