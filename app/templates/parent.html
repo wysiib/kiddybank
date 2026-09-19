@@ -86,13 +86,16 @@
     <button class="btn btn-alt">{{ t('par.product.delete') }}</button>
   </form>
   {% endfor %}
-  <form method="post" action="/eltern/produkte" class="card flex flex-wrap items-end gap-3">
+  <details>
+  <summary class="btn btn-alt cursor-pointer">{{ t('par.product.add') }}</summary>
+  <form method="post" action="/eltern/produkte" class="card mt-3 flex flex-wrap items-end gap-3">
     <label class="block flex-1">{{ t('par.product.name') }}<input class="input" name="name" required></label>
     <label class="block w-28">{{ t('par.product.days') }}<input class="input" name="days" type="number" min="1" required></label>
     <label class="block w-28">{{ t('par.product.rate') }}<input class="input" name="rate" inputmode="decimal" required></label>
     <label class="block w-36">&nbsp;{{ period_select(default_days) }}</label>
     <button class="btn">{{ t('par.product.add') }}</button>
   </form>
+  </details>
 </section>
 
 <section class="space-y-3">
@@ -140,7 +143,9 @@
     </details>
   </div>
   {% endfor %}
-  <form method="post" action="/eltern/dauerauftrag" class="rule-form card space-y-3">
+  <details>
+  <summary class="btn btn-alt cursor-pointer">{{ t('par.rule.add') }}</summary>
+  <form method="post" action="/eltern/dauerauftrag" class="rule-form card mt-3 space-y-3">
     <label class="block">{{ t('par.rule.kid') }}
       <select class="input" name="kid_id">{% for k in kids %}<option value="{{ k.id }}">{{ k.avatar }} {{ k.name }}</option>{% endfor %}</select>
     </label>
@@ -148,5 +153,6 @@
     {{ rule_fields() }}
     <button class="btn">{{ t('par.rule.add') }}</button>
   </form>
+  </details>
 </section>
 {% endblock %}
