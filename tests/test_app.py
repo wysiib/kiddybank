@@ -354,6 +354,7 @@ def test_home_week_card(family):
     later = family.get("/home").text
     assert "Zinsen" in later and "Von anderen" not in later and "Ausgegeben" not in later
     assert "stack-small" in later  # the interest row uses small coins
+    assert "Große Münze" not in later and "Kleine Münze" in later and later.count("stack-row") == 1  # no euro row, no big-coin note
     with Session(web._engine()) as s:
         for tx in s.exec(select(Transaction)).all():
             s.delete(tx)

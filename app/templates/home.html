@@ -26,7 +26,7 @@
 <a href="/konto/{{ giro.id }}" class="card block space-y-2">
   <div class="font-bold">📅 {{ t('week.title') }}</div>
   {% for k, cents in week.items() %}
-  <div class="grid grid-cols-[1fr_auto] items-center gap-2">
+  <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
     <div>
       <span>{{ t('week.' ~ k) }}</span>
       {% if k == 'zins' %}{{ stack('small', week_pic.coins[k], tone='gold', row=True, label=cents|money) }}
@@ -35,7 +35,7 @@
     <span class="text-2xl font-extrabold {{ 'text-red-600' if k == 'spent' else 'text-green-600' }}">{{ '-' if k == 'spent' else '+' }}{{ cents|money }}</span>
   </div>
   {% endfor %}
-  <p class="text-sm text-slate-500">{{ t('coin.unit', amount=week_pic.big|compact) }}{% if week.get('zins') %} · {{ t('coin.unit.small', amount=week_pic.small|compact) }}{% endif %}</p>
+  <p class="text-sm text-slate-500">{% if week_pic.big %}{{ t('coin.unit', amount=week_pic.big|compact) }}{% endif %}{% if week_pic.big and week.get('zins') %} · {% endif %}{% if week.get('zins') %}{{ t('coin.unit.small', amount=week_pic.small|compact) }}{% endif %}</p>
   <p class="lesson">{{ t('week.lesson') }}</p>
 </a>
 {% endif %}

@@ -54,7 +54,7 @@ def home(request: Request, user: User = Depends(kid), s: Session = db, today: da
     euros = [v for k, v in week.items() if k != "zins"]
     big = coins.coin_unit(euros)
     small = coins.coin_unit([week.get("zins", 0)], coins.SMALL_LADDER, coins.SMALL_CAP)
-    week_pic = {"big": big, "small": small,
+    week_pic = {"big": big if euros else 0, "small": small,
                 "coins": {k: coins.coins(v, small if k == "zins" else big) for k, v in week.items()}}
     deposits = active_deposits(s, user)
     cards = goals.cards([g for g in goals.list_goals(s, user.id) if not g.done_at], giro)
