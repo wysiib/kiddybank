@@ -14,7 +14,7 @@
 {% set full = units|int %}{% set rest = units - full %}
 <div class="cals"{% if label %} role="img" aria-label="{{ label }}"{% else %} aria-hidden="true"{% endif %}>
   {%- for _ in range(full) %}<i class="cal"></i>{% endfor -%}
-  {%- if rest > 0.02 %}<i class="cal cal-part" style="--k: {{ [rest, 0.45]|max }}"></i>{% endif -%}
+  {%- if rest > 0.02 %}<i class="cal cal-part" style="--k: {{ ([rest, 0.45]|max)|round(2) }}"></i>{% endif -%}
 </div>
 {% endmacro %}
 

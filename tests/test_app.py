@@ -129,12 +129,24 @@ def test_festgeld_locked_and_ready_show_stacks(family):
     locked = mine()
     assert locked.count('<i class="coin"></i>') == 10 and locked.count("coin-ghost") == 3  # 10 EUR now, 3 x 5 Cent still to come
     assert 'class="pips"' in locked and "Große Münze = 1,00 €" in locked and "Kleine Münze = 5 Cent" in locked
-    assert "Noch 7 Tage" in locked
+    assert "Noch 7 Tage" in locked and "1 Punkt = 1 Tag" in locked and "1 Kalender" not in locked  # dots, not calendars
 
     family.clock["today"] = D0 + timedelta(days=7)
     ready = mine()
     assert ready.count('<i class="coin"></i>') == 13 and "coin-ghost" not in ready  # the interest is solid gold now
     assert "Fertig!" in ready and "Abholen" in ready
+
+
+def test_festgeld_deposits_share_one_coin_unit(family):
+    login(family, 1, "1234")
+    family.post("/eltern/buchen", data={"account_id": account_id(2, "giro"), "amount": "40,00"})  # Mia: 50 EUR
+    login(family, 2, "1111")
+    open_deposit(family, 500, 1)
+    open_deposit(family, 4500, 1)
+    cards = family.get("/festgeld").text.split("Neue Schatztruhe")[0].split('class="card space-y-3 text-center"')[1:]
+    assert len(cards) == 2
+    assert [c.count('<i class="coin"></i>') for c in cards] == [1, 9]  # 5 and 45 EUR on one unit of 5 EUR: 10x money is not 2x coins
+    assert all("Große Münze = 5,00 €" in c for c in cards)
 
 
 def test_festgeld_offers_show_term_as_calendars_and_interest_as_coins(family):
@@ -184,6 +196,8 @@ def test_parent_configures_rates_and_kid_opens_two_deposits(family):
     assert 'id="offer-1"' in bars and "1,50 €" in bars and "4 Cent" in bars  # Kurz 1,5 % for a week vs 0,04 % Giro
     assert f'id="offer-{turbo}"' in bars and "41 Cent" in bars  # Turbo 50 %/year for 3 days, and every tile is refreshed
     assert 'id="offer-unit"' in bars  # the unit note is refreshed too, the scale can change with the amount
+    unit = lambda html: re.search(r'<p id="offer-unit"[^>]*>(.*?)</p>', html).group(1)  # noqa: E731
+    assert "Kleine Münze = 10 Cent" in unit(page) and "Kleine Münze = 1,00 €" in unit(bars)  # demo 10 EUR vs 100 EUR: the scale moved
     assert "Kurz" in page and "Turbo" in page and page.count("Noch 7 Tage") == 1 and "Noch 3 Tage" in page
 
     def offers():  # what the kid can pick from, i.e. the part of the page after the "new deposit" heading
@@ -612,10 +626,20 @@ def test_home_counts_down_to_the_interest_payout(family):
     login(family, 2, "1111")  # 10 EUR at 1 % per week, paid every 7 days: 10 Cent
     home = family.get("/home").text
     assert home.count('class="pip"') == 6 and home.count("pip-now") == 1 and "pip-on" not in home
+    assert "1 Punkt = 1 Tag" in home and "1 Kalender" not in home  # 7 days: one dot a day
     assert "10 Cent" in home
     family.clock["today"] = D0 + timedelta(days=3)
     home = family.get("/home").text
     assert home.count("pip-on") == 3  # three of seven days are over
+
+
+def test_home_dots_count_weeks_for_a_monthly_payout(family):
+    login(family, 1, "1234")
+    family.post("/eltern/kinder/2", data={"rate": "1", "period": 30, "festgeld": "on"})  # 1 % per 30 days on 10 EUR: 10 Cent
+    login(family, 2, "1111")
+    home = family.get("/home").text
+    assert home.count('class="pip"') + home.count("pip-now") == 5  # ceil(30 / 7) weeks
+    assert "1 Punkt = 1 Woche" in home and "10 Cent" in home
 
 
 def test_goal_progress_is_ten_slots(family):

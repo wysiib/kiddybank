@@ -30,12 +30,10 @@ GOAL_EMOJIS = ["🎯", "🧸", "🚲", "⚽", "🎮", "📚", "🎁", "✈️", 
 
 # --- kid: festgeld -----------------------------------------------------------------------------
 
-def _deposit_row(a: Account, today: date) -> dict:
+def _deposit_row(a: Account, today: date, big: int, small: int) -> dict:
     """One open deposit with what its card draws: deposit and interest as coins, elapsed time as dots."""
     total, left = (a.maturity_date - a.opened_at).days, (a.maturity_date - today).days
     payout = festgeld.festgeld_payout(a)
-    big = coins.coin_unit([a.balance_cents])
-    small = coins.coin_unit([payout[1]], coins.SMALL_LADDER, coins.SMALL_CAP)
     unit = coins.time_unit(total)
     return {"acc": a, "status": festgeld.festgeld_status(a, today), "days": left, "payout": payout,
             "big": big, "small": small, "deposit_coins": coins.coins(a.balance_cents, big),
@@ -48,7 +46,9 @@ def _festgeld_page(request: Request, s: Session, user: User, today: date, error:
     deposits = active_deposits(s, user)
     if not user.festgeld_enabled and not deposits:
         raise HTTPException(403, "err.module_off")
-    rows = [_deposit_row(a, today) for a in deposits]
+    big = coins.coin_unit([a.balance_cents for a in deposits])  # one unit for every card, so equal coins are equal money
+    small = coins.coin_unit([festgeld.festgeld_payout(a)[1] for a in deposits], coins.SMALL_LADDER, coins.SMALL_CAP)
+    rows = [_deposit_row(a, today, big, small) for a in deposits]
     products, view = festgeld.offer_stacks(s, ledger.get_account(s, user.id, "giro"), 0)
     return render(request, "festgeld.html", user=user, rows=rows, products=products, view=view, error=error, gap=gap,
                   tok=issue_token(request, "festgeld"), days=ledger.get_account(s, user.id, "giro").payout_days)

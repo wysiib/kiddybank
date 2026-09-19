@@ -11,10 +11,10 @@
 <div class="card space-y-3 text-center">
   <p class="text-base text-slate-500">{{ r.acc.name }} · {{ r.acc.interest_rate_bp|per(days) }} % {{ t('per.' ~ days) }}</p>
   <div class="flex items-end justify-center gap-4">
-    <div class="col">{{ stack('big', r.deposit_coins, label=r.acc.balance_cents|money) }}<b>{{ r.acc.balance_cents|money }}</b>{{ t('fg.yours') }}</div>
+    <div class="col">{{ stack('big', r.deposit_coins) }}<b>{{ r.acc.balance_cents|money }}</b>{{ t('fg.yours') }}</div>
     <div class="col">
-      {% if r.status == 'ready' %}{{ stack('small', r.interest_coins, tone='gold', label=r.payout[1]|compact) }}
-      {% else %}{{ stack('small', 0, ghost=r.interest_coins, tone='gold', label=r.payout[1]|compact) }}{% endif %}
+      {% if r.status == 'ready' %}{{ stack('small', r.interest_coins, tone='gold') }}
+      {% else %}{{ stack('small', 0, ghost=r.interest_coins, tone='gold') }}{% endif %}
       <b>+{{ r.payout[1]|compact }}</b>{{ t('fg.extra' if r.status == 'ready' else 'fg.comes') }}
     </div>
   </div>
@@ -28,7 +28,7 @@
   {% else %}
   <div class="text-5xl">🔒</div>
   {{ pips(r.pips[0], r.pips[1]) }}
-  <p class="text-sm text-slate-500">{{ t('cal.unit.' ~ r.unit) }}</p>
+  <p class="text-sm text-slate-500">{{ t('dot.unit.' ~ r.unit) }}</p>
   <p class="text-2xl font-bold">⏳ {{ t('fg.locked.1') if r.days == 1 else t('fg.locked', n=r.days) }}</p>
   <p class="lesson">{{ t('fg.locked.lesson') }} {{ t('fg.preview', total=r.payout[0]|money) }}</p>
   {% endif %}

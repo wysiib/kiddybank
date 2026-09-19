@@ -168,9 +168,10 @@ def _cash_page(request: Request, s: Session, user: User, kind: str, cents: int |
     lost = ledger.interest_cents(cents or 0, giro.interest_rate_bp, giro.payout_days) if kind == "abheben" else 0
     pic = None
     if cents:  # the confirm step draws what stays, what moves and what interest is given up
-        small = coins.coin_unit([lost], coins.SMALL_LADDER, coins.SMALL_CAP)
-        pic = {"small": small, "lost_coins": coins.coins(lost, small)}
+        pic = {}
         if kind == "abheben":
+            pic["small"] = coins.coin_unit([lost], coins.SMALL_LADDER, coins.SMALL_CAP)
+            pic["lost_coins"] = coins.coins(lost, pic["small"])
             shown = min(cents, giro.balance_cents)  # the balance may have changed since the check
             pic["unit"] = coins.coin_unit([giro.balance_cents])
             pic["after"] = giro.balance_cents - shown

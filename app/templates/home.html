@@ -13,11 +13,11 @@
   <div class="text-5xl font-extrabold">{{ giro.balance_cents|money }}</div>
   {% if payout %}
   <div class="flex items-center gap-3">
-    {{ pips(payout.total, payout.on, interest_hint) }}
-    <span class="text-2xl">→</span>
+    {{ pips(payout.total, payout.on) }}
+    <span class="text-2xl" aria-hidden="true">→</span>
     <span class="rounded-full border-4 border-amber-700 bg-amber-400 px-3 py-1 text-lg font-extrabold text-amber-900">{{ payout.cents|compact }}</span>
   </div>
-  <p class="text-sm text-slate-500">{{ t('cal.unit.' ~ payout.unit) }}</p>
+  <p class="text-sm text-slate-500">{{ t('dot.unit.' ~ payout.unit) }}</p>
   {% endif %}
   {% if interest_hint %}<p class="lesson">{{ interest_hint }}</p>{% endif %}
 </a>
@@ -29,8 +29,8 @@
   <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
     <div>
       <span>{{ t('week.' ~ k) }}</span>
-      {% if k == 'zins' %}{{ stack('small', week_pic.coins[k], tone='gold', row=True, label=cents|money) }}
-      {% else %}{{ stack('big', week_pic.coins[k], row=True, label=cents|money) }}{% endif %}
+      {% if k == 'zins' %}{{ stack('small', week_pic.coins[k], tone='gold', row=True) }}
+      {% else %}{{ stack('big', week_pic.coins[k], row=True) }}{% endif %}
     </div>
     <span class="text-2xl font-extrabold {{ 'text-red-600' if k == 'spent' else 'text-green-600' }}">{{ '-' if k == 'spent' else '+' }}{{ cents|money }}</span>
   </div>

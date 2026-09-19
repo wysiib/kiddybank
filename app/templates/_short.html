@@ -1,8 +1,8 @@
 {% from "_coins.html" import stack %}
 <div class="card space-y-2 text-center">
   <div class="flex items-end justify-center gap-8">
-    <div class="col">{{ stack('big', gap.have, label=gap.have_cents|money) }}<b>{{ t('short.have', amount=gap.have_cents|money) }}</b></div>
-    <div class="col">{{ stack('big', gap.have, ghost=gap.gap, label=gap.need_cents|money) }}<b>{{ t('short.need', amount=gap.need_cents|money) }}</b></div>
+    <div class="col">{{ stack('big', gap.have) }}<b>{{ t('short.have', amount=gap.have_cents|money) }}</b></div>
+    <div class="col">{{ stack('big', gap.have, ghost=gap.gap) }}<b>{{ t('short.need', amount=gap.need_cents|money) }}</b></div>
   </div>
   <p class="text-sm text-slate-500">{{ t('coin.unit', amount=gap.unit|compact) }}</p>
 </div>

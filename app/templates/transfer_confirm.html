@@ -4,9 +4,9 @@
 <div class="card space-y-4 text-center">
   <p class="text-3xl font-extrabold">💸 {{ t('xfer.confirm', amount=cents|money, name=to_name) }}</p>
   <div class="grid grid-cols-3 items-end">
-    <div class="col">{{ stack('big', pic.mine, label=(src.balance_cents - cents)|money) }}<span class="text-3xl">👛</span><b>{{ (src.balance_cents - cents)|money }}</b>{{ t('xfer.stays') }}</div>
+    <div class="col">{{ stack('big', pic.mine) }}<span class="text-3xl">👛</span><b>{{ (src.balance_cents - cents)|money }}</b>{{ t('xfer.stays') }}</div>
     <div class="flight" aria-hidden="true"><i class="coin"></i><i class="coin"></i><i class="coin"></i></div>
-    <div class="col">{{ stack('big', 0, ghost=pic.go, label=cents|money) }}<span class="text-3xl">➡️</span><b>{{ cents|money }}</b>{{ t('xfer.arrives', name=to_name) }}</div>
+    <div class="col">{{ stack('big', 0, ghost=pic.go) }}<span class="text-3xl">➡️</span><b>{{ cents|money }}</b>{{ t('xfer.arrives', name=to_name) }}</div>
   </div>
   <p class="text-sm text-slate-500">{{ t('coin.unit', amount=pic.unit|compact) }}</p>
   <p class="lesson">{{ t('xfer.lesson') }}</p>

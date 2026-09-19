@@ -4,6 +4,6 @@
 {{ calendars(o.cals, term) }}
 <span class="text-base font-normal">{{ term }}</span>
 <div class="flex min-h-24 items-end justify-center gap-3">
-  <div class="col">{{ stack('small', o.giro_coins, label=o.giro|compact) }}<b>{{ o.giro|compact }}</b>{{ t('fg.tower.giro') }}</div>
-  <div class="col">{{ stack('small', o.fg_coins, tone='gold', label=o.fg|compact) }}<b>{{ o.fg|compact }}</b>{{ t('fg.tower.fg') }}</div>
+  <div class="col">{{ stack('small', o.giro_coins) }}<b>{{ o.giro|compact }}</b>{{ t('fg.tower.giro') }}</div>
+  <div class="col">{{ stack('small', o.fg_coins, tone='gold') }}<b>{{ o.fg|compact }}</b>{{ t('fg.tower.fg') }}</div>
 </div>
