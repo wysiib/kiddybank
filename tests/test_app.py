@@ -143,3 +143,73 @@ def test_dauerauftrag_uses_chosen_weekday(family):
     with Session(main._engine()) as s:
         r = s.exec(select(main.RecurringRule)).one()
         assert r.next_run.weekday() == 4 and r.next_run > family.clock["today"]
+
+
+JPEG = b"\xff\xd8\xff\xe0" + b"x" * 100
+
+
+def add_goal(c, **kw):
+    return c.post("/ziele", data={"name": "Lego", "emoji": "🧸", "cents": 2000, **kw})
+
+
+def test_goal_create_photo_and_progress(family):
+    login(family, 2, "1111")
+    assert add_goal(family, name="").status_code == 400  # neither name nor photo
+    r = family.post("/ziele", data={"name": "", "cents": 2000}, files={"photo": ("g.jpg", JPEG, "image/jpeg")})
+    assert r.status_code == 303
+    page = family.get("/ziele").text
+    assert "/ziele/1/bild" in page and "Noch 10,00 € bis dahin" in page  # 10 EUR of 20 EUR
+    img = family.get("/ziele/1/bild")
+    assert img.content == JPEG and img.headers["content-type"] == "image/jpeg"
+    assert img.headers["x-content-type-options"] == "nosniff"
+
+    assert add_goal(family).status_code == 303  # name only works too
+    assert "Lego" in family.get("/ziele").text
+
+
+def test_goal_rejects_bad_input(family):
+    login(family, 2, "1111")
+    r = family.post("/ziele", data={"name": "x", "cents": 500}, files={"photo": ("g.gif", b"GIF89a", "image/gif")})
+    assert r.status_code == 400 and "geht es leider nicht" in r.text
+    big = JPEG + b"x" * ledger.MAX_PHOTO_BYTES
+    r = family.post("/ziele", data={"name": "x", "cents": 500}, files={"photo": ("g.jpg", big, "image/jpeg")})
+    assert r.status_code == 400 and "zu groß" in r.text
+    assert add_goal(family, cents=0).status_code == 400
+
+    for _ in range(3):
+        assert add_goal(family).status_code == 303
+    r = add_goal(family)
+    assert r.status_code == 400 and "schon 3" in r.text
+
+
+def test_goal_scoping_between_kids_and_parent(family):
+    login(family, 2, "1111")
+    family.post("/ziele", data={"name": "Lego", "cents": 2000}, files={"photo": ("g.jpg", JPEG, "image/jpeg")})
+
+    login(family, 1, "1234")
+    family.post("/eltern/kinder", data={"name": "Tom", "pin": "2222"})
+    assert family.get("/ziele/1/bild").status_code == 200  # a parent may see it
+
+    login(family, 3, "2222")
+    assert family.get("/ziele/1/bild").status_code == 404
+    assert family.post("/ziele/1/loeschen").status_code == 404
+    assert family.post("/ziele/1/geschafft").status_code == 404
+    assert "Lego" not in family.get("/ziele").text
+
+
+def test_goal_finish_and_delete(family):
+    login(family, 2, "1111")
+    add_goal(family, cents=1500)  # goal 1: 10 EUR of 15 EUR
+    add_goal(family, name="Ball", cents=500)  # goal 2: already affordable
+
+    r = family.post("/ziele/1/geschafft")
+    assert r.status_code == 400 and "nicht genug Geld" in r.text  # not reached yet
+
+    r = family.post("/ziele/2/geschafft")
+    assert r.status_code == 200 and "Mama oder Papa" in r.text
+    page = family.get("/ziele").text
+    assert "✅ Geschafft" in page and "Ball" in page
+    assert family.post("/ziele/2/loeschen").status_code == 404  # finished goals stay as a record
+
+    assert family.post("/ziele/1/loeschen").status_code == 303
+    assert "Lego" not in family.get("/ziele").text

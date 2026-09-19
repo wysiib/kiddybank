@@ -1,0 +1,9 @@
+{# Goal picture (photo fades from gray to color as the bar fills, else the emoji) and progress bar. #}
+{% macro visual(g, pct, cls="h-24 w-24") %}
+{% if g.photo %}<img src="/ziele/{{ g.id }}/bild" alt="{{ g.name }}" class="{{ cls }} mx-auto rounded-2xl object-cover" style="filter: grayscale({{ 100 - pct }}%)">
+{% else %}<span class="text-6xl">{{ g.emoji }}</span>{% endif %}
+{% endmacro %}
+
+{% macro bar(pct) %}
+<div class="h-5 w-full overflow-hidden rounded-full bg-slate-200"><div class="h-full rounded-full bg-pink-500" style="width: {{ pct }}%"></div></div>
+{% endmacro %}

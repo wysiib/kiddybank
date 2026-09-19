@@ -5,8 +5,8 @@ from decimal import Decimal, InvalidOperation
 from functools import lru_cache
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Form, HTTPException, Request
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select
@@ -16,7 +16,7 @@ from . import ledger
 from .auth import verify_pin
 from .i18n import LOCALE, format_date, format_money, format_percent, t
 from .ledger import LedgerError
-from .models import Account, FestgeldProduct, RecurringRule, User, make_engine
+from .models import Account, FestgeldProduct, Goal, RecurringRule, User, make_engine
 
 BASE = Path(__file__).parent
 DB_URL = os.environ.get("KIDDYBANK_DB", "sqlite:///kiddybank.db")
@@ -43,6 +43,7 @@ templates.env.filters["date"] = format_date
 templates.env.filters["pct"] = lambda bp: format_percent(bp)
 
 AVATARS = ["🐷", "🦊", "🐼", "🦁", "🐸", "🐙", "🦄", "🐯", "🐵", "🐰"]
+GOAL_EMOJIS = ["🎯", "🧸", "🚲", "⚽", "🎮", "📚", "🎁", "✈️", "🐶", "🍦"]
 
 
 # --- plumbing ----------------------------------------------------------------------------------
@@ -365,6 +366,74 @@ def festgeld_collect(request: Request, account_id: int, user: User = Depends(kid
         return redirect(f"/festgeld?error={e.args[0]}")
     return render(request, "done.html", user=user, emoji="🧰", msg=t("fg.collected", total=format_money(total)),
                   lesson=t("fg.ready.lesson", interest=format_money(interest)) + " " + t("fg.collected.lesson"))
+
+
+# --- kid: goals --------------------------------------------------------------------------------
+
+def _goal_cards(goals: list[Goal], giro: Account) -> list[dict]:
+    return [{"goal": g, "pct": ledger.goal_progress(g, giro), "reached": ledger.goal_reached(g, giro)} for g in goals]
+
+
+def _goals_page(request: Request, s: Session, user: User, error: str | None = None):
+    giro = ledger.get_account(s, user.id, "giro")
+    cards = _goal_cards(ledger.list_goals(s, user.id), giro)
+    active = [c for c in cards if not c["goal"].done_at]
+    done = [c for c in reversed(cards) if c["goal"].done_at]
+    return render(request, "goals.html", 200 if not error else 400, user=user, giro=giro, active=active, done=done,
+                  can_add=len(active) < ledger.MAX_ACTIVE_GOALS, emojis=GOAL_EMOJIS, error=error)
+
+
+def _own_goal(s: Session, user: User, goal_id: int) -> Goal:
+    g = s.get(Goal, goal_id)
+    if not g or g.user_id != user.id:
+        raise HTTPException(404)
+    return g
+
+
+@app.get("/ziele")
+def goals_page(request: Request, user: User = Depends(kid), s: Session = Depends(get_session)):
+    return _goals_page(request, s, user)
+
+
+@app.post("/ziele")
+def goal_create(request: Request, name: str = Form(""), emoji: str = Form(""), cents: int = Form(0),
+                photo: UploadFile | None = File(None), user: User = Depends(kid), s: Session = Depends(get_session)):
+    data = photo.file.read(ledger.MAX_PHOTO_BYTES + 1) if photo else b""  # bounded read, size is checked in the ledger
+    try:
+        ledger.create_goal(s, user.id, name, emoji if emoji in GOAL_EMOJIS else GOAL_EMOJIS[0], cents, data or None)
+    except LedgerError as e:
+        s.rollback()
+        return _goals_page(request, s, user, e.args[0])
+    return redirect("/ziele")
+
+
+@app.post("/ziele/{goal_id}/loeschen")
+def goal_delete(goal_id: int, user: User = Depends(kid), s: Session = Depends(get_session)):
+    g = _own_goal(s, user, goal_id)
+    if g.done_at:
+        raise HTTPException(404)  # finished goals stay as a record
+    s.delete(g)
+    return redirect("/ziele")
+
+
+@app.post("/ziele/{goal_id}/geschafft")
+def goal_finish(request: Request, goal_id: int, user: User = Depends(kid), s: Session = Depends(get_session)):
+    g = _own_goal(s, user, goal_id)
+    try:
+        ledger.finish_goal(g, ledger.get_account(s, user.id, "giro"))
+    except LedgerError as e:
+        s.rollback()
+        return _goals_page(request, s, user, e.args[0])
+    return render(request, "done.html", user=user, emoji="✅", msg=t("goal.done.msg"), lesson=t("goal.done.hint"))
+
+
+@app.get("/ziele/{goal_id}/bild")
+def goal_photo(goal_id: int, user: User = Depends(current_user), s: Session = Depends(get_session)):
+    g = s.get(Goal, goal_id)
+    if not g or not g.photo or (user.role != "parent" and g.user_id != user.id):
+        raise HTTPException(404)
+    return Response(g.photo, media_type="image/jpeg",
+                    headers={"X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-cache"})
 
 
 # --- parents -----------------------------------------------------------------------------------
