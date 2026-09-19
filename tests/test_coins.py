@@ -59,3 +59,37 @@ def test_shortfall_always_shows_a_missing_coin():
     assert close["have"] == 2
     assert close["gap"] == 1
     assert (s["have_cents"], s["need_cents"]) == (1000, 9999)
+
+
+from app import web
+
+
+def render_macro(name, *args, **kw):
+    return str(web.templates.env.get_template("_coins.html").module.__dict__[name](*args, **kw))
+
+
+def test_stack_draws_solid_then_ghost_coins():
+    html = render_macro("stack", "small", 3, ghost=2, tone="gold", label="15 Cent")
+    assert html.count('<i class="coin"></i>') == 3 and html.count("coin-ghost") == 2
+    assert "stack-gold" in html and 'aria-label="15 Cent"' in html
+    assert "stack-row" in render_macro("stack", "big", 1, row=True)
+    assert "aria-hidden" in render_macro("stack", "big", 1)  # no label: the printed amount beside it says it
+
+
+def test_calendars_draw_a_smaller_last_one():
+    html = render_macro("calendars", 4.29)
+    assert html.count('<i class="cal"></i>') == 4 and html.count("cal-part") == 1
+    assert "--k: 0.45" in html  # 0.29 of a week would vanish, so it is clamped to about half
+    assert render_macro("calendars", 1).count("cal-part") == 0
+
+
+def test_pips_mark_elapsed_and_current():
+    html = render_macro("pips", 7, 3)
+    assert html.count("pip-on") == 3 and html.count("pip-now") == 1 and html.count('<i class="pip') == 7
+
+
+def test_slots_fill_partly():
+    html = render_macro("slots", 64)
+    assert html.count("slot-on") == 6 and html.count("slot-part") == 1 and "--fill: 40%" in html
+    assert render_macro("slots", 100).count("slot-on") == 10
+    assert web.templates.env.filters["compact"](5) == "5 Cent" and web.templates.env.filters["compact"](150) == "1,50 €"
