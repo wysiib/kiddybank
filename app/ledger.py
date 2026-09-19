@@ -11,6 +11,7 @@ from sqlmodel import Session, select
 from .auth import hash_pin
 from .models import Account, FestgeldProduct, Goal, RecurringRule, Transaction, User
 
+MAX_CENTS = 100_000_000  # 1 million EUR: far above any pocket money, far below SQLite's 64-bit integers
 INTEREST_DENOM = 10_000 * 365  # interest_accrued unit: 1 cent
 PAYOUT_PERIODS = (7, 30, 365)  # a parent picks per kid how often interest is booked; rates are entered per that period
 DEFAULT_PAYOUT_DAYS = 7
@@ -67,9 +68,13 @@ def get_account(s: Session, user_id: int, type: str) -> Account:
     return s.exec(select(Account).where(Account.user_id == user_id, Account.type == type)).one()
 
 
-def _check_debit(acc: Account, cents: int) -> None:
-    if cents <= 0:
+def check_amount(cents: int) -> None:
+    if not 0 < cents <= MAX_CENTS:
         raise LedgerError("err.amount")
+
+
+def _check_debit(acc: Account, cents: int) -> None:
+    check_amount(cents)
     if acc.balance_cents < cents and not acc.allow_overdraft:
         raise LedgerError("err.insufficient")
 
@@ -77,11 +82,10 @@ def _check_debit(acc: Account, cents: int) -> None:
 def post(s: Session, from_acc: Account | None, to_acc: Account | None, cents: int, type: str,
          note: str = "", now: datetime | None = None, seen: bool = False) -> Transaction:
     """Low level: one atomic booking. A None side is the virtual parent/bank/market."""
+    check_amount(cents)
     if from_acc is not None:
         _check_debit(from_acc, cents)
         from_acc.balance_cents -= cents
-    elif cents <= 0:
-        raise LedgerError("err.amount")
     if to_acc is not None:
         to_acc.balance_cents += cents
     now = now or datetime.now()
@@ -316,8 +320,7 @@ def goal_reached(goal: Goal, giro: Account) -> bool:
 
 def create_goal(s: Session, user_id: int, name: str, emoji: str, target_cents: int, photo: bytes | None) -> Goal:
     name = name.strip()[:40]
-    if target_cents <= 0:
-        raise LedgerError("err.amount")
+    check_amount(target_cents)
     if photo is not None:
         if len(photo) > MAX_PHOTO_BYTES:
             raise LedgerError("err.photo_size")

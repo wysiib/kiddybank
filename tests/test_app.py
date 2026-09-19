@@ -343,3 +343,17 @@ def test_cash_in_and_out_need_parent_pin(family):
 def test_cash_is_kid_only(family):
     assert family.post("/bar/einzahlen", data={"cents": 100, "pin": "1234"}).status_code == 303  # parent -> /eltern
     assert giro_cents(2) == 1000
+
+
+def test_absurd_amounts_are_rejected_not_crashes(family):
+    huge = 10**30
+    login(family, 2, "1111")
+    assert add_goal(family, cents=huge).status_code == 400
+    assert family.post("/bar/einzahlen", data={"cents": huge, "pin": "1234"}).status_code == 400
+    assert giro_cents(2) == 1000
+    for text in ("nan", "inf", "1e30"):
+        with pytest.raises(ledger.LedgerError):
+            ledger.check_amount(main.parse_euro(text))
+    login(family, 1, "1234")
+    assert family.post("/eltern/buchen", data={"account_id": account_id(2, "giro"), "amount": "nan"}).status_code == 400
+    assert family.post("/eltern/kinder/2/module", data={"rate": "inf"}).status_code == 400

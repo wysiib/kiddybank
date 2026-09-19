@@ -111,19 +111,23 @@ def own_accounts(s: Session, user: User, *types: str) -> list[Account]:
     return list(s.exec(q.order_by(Account.id)).all())
 
 
-def parse_euro(text: str) -> int:
+def _decimal_x100(text: str, err: str) -> int:
     try:
-        return int((Decimal(text.strip().replace(",", ".")) * 100).to_integral_value())
+        value = Decimal(text.strip().replace(",", "."))
+        if not value.is_finite():  # "nan" / "inf" parse as Decimals but are no amounts
+            raise InvalidOperation
+        return int((value * 100).to_integral_value())
     except InvalidOperation:
-        raise LedgerError("err.amount")
+        raise LedgerError(err) from None
+
+
+def parse_euro(text: str) -> int:
+    return _decimal_x100(text, "err.amount")
 
 
 def parse_percent(text: str) -> int:
     """'2,5' -> 250 basis points."""
-    try:
-        return int((Decimal(text.strip().replace(",", ".")) * 100).to_integral_value())
-    except InvalidOperation:
-        raise LedgerError("err.rate")
+    return _decimal_x100(text, "err.rate")
 
 
 def parse_rate(text: str, days: int) -> int:
