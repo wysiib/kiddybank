@@ -402,3 +402,25 @@ def test_failed_operations_change_nothing(s, kids, kurz):
             bad()
         assert before() == state
     assert s.exec(select(ledger.Account).where(ledger.Account.type == "festgeld")).all() == []
+
+
+def test_goal_lists_do_not_load_photos(s, kids):
+    from sqlalchemy import inspect
+    uid = kids[0].id
+    ledger.create_goal(s, uid, "Lego", "🧸", 2000, b"\xff\xd8\xff" + b"x" * 1000, D0)
+    s.commit()
+    s.expunge_all()
+    goal = ledger.list_goals(s, uid)[0]
+    assert goal.has_photo and "photo" in inspect(goal).unloaded  # the BLOB stays in the DB until asked for
+    assert s.get(Goal, goal.id).photo.startswith(b"\xff\xd8\xff")
+
+
+def test_older_db_marks_existing_photos(tmp_path):
+    import sqlite3
+    path = tmp_path / "old.db"
+    db = sqlite3.connect(path)
+    db.execute("CREATE TABLE goal (id INTEGER PRIMARY KEY, photo BLOB)")
+    db.execute("INSERT INTO goal (photo) VALUES (x'ffd8ff'), (NULL)")
+    db.commit(); db.close()
+    make_engine(f"sqlite:///{path}")
+    assert sqlite3.connect(path).execute("SELECT has_photo FROM goal ORDER BY id").fetchall() == [(1,), (0,)]

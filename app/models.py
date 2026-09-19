@@ -69,6 +69,7 @@ class Goal(SQLModel, table=True):
     emoji: str = "🎯"
     target_cents: int
     photo: bytes | None = None  # JPEG, shrunk in the browser; kept in the DB so it stays the one file to back up
+    has_photo: bool = False  # lets pages ask "picture or emoji?" without loading the BLOB (list_goals defers it)
     created_at: datetime
     reached_seen_at: datetime | None = None  # celebration dismissed
     done_at: datetime | None = None  # kid tapped "Ziel geschafft!"
@@ -118,6 +119,7 @@ ADDED_COLUMNS = (
     ("festgeldproduct", "rate_days", "INTEGER NOT NULL DEFAULT 365", None),
     ("user", "pin_failures", "INTEGER NOT NULL DEFAULT 0", None),
     ("user", "locked_until", "DATETIME", None),
+    ("goal", "has_photo", "BOOLEAN NOT NULL DEFAULT 0", "UPDATE goal SET has_photo = 1 WHERE photo IS NOT NULL"),
 )
 
 

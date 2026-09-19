@@ -6,6 +6,7 @@ Errors are LedgerError(i18n_key), never sentences.
 import calendar
 from datetime import date, datetime, time, timedelta
 
+from sqlalchemy.orm import defer
 from sqlmodel import Session, select
 
 from .auth import hash_pin
@@ -324,8 +325,8 @@ MAX_PHOTO_BYTES = 300_000  # the browser shrinks photos to ~50 KB, this only sto
 
 
 def list_goals(s: Session, user_id: int) -> list[Goal]:
-    # ponytail: photos load with the row; defer() them if goal counts ever grow
-    return list(s.exec(select(Goal).where(Goal.user_id == user_id).order_by(Goal.id)).all())
+    # finished goals are kept forever, so their photos stay out of every page load; only /ziele/{id}/bild reads one
+    return list(s.exec(select(Goal).where(Goal.user_id == user_id).options(defer(Goal.photo)).order_by(Goal.id)).all())
 
 
 def goal_progress(goal: Goal, giro: Account) -> int:
@@ -354,7 +355,8 @@ def create_goal(s: Session, user_id: int, name: str, emoji: str, target_cents: i
     if sum(1 for g in list_goals(s, user_id) if g.done_at is None) >= MAX_ACTIVE_GOALS:
         raise LedgerError("err.goal_limit")
     now = stamp(today)
-    goal = Goal(user_id=user_id, name=name, emoji=emoji, target_cents=target_cents, photo=photo, created_at=now)
+    goal = Goal(user_id=user_id, name=name, emoji=emoji, target_cents=target_cents, photo=photo,
+                has_photo=photo is not None, created_at=now)
     if goal_reached(goal, get_account(s, user_id, "giro")):
         goal.reached_seen_at = now  # already affordable at creation: no fake celebration
     s.add(goal)
