@@ -51,10 +51,16 @@ def _interest_hint(acc: Account, today: date) -> tuple[str, dict | None]:
 def home(request: Request, user: User = Depends(kid), s: Session = db, today: date = Depends(get_today)):
     giro = ledger.get_account(s, user.id, "giro")
     week = {k: v for k, v in ledger.week_summary(s, giro, today).items() if v}
+    euros = [v for k, v in week.items() if k != "zins"]
+    big = coins.coin_unit(euros)
+    small = coins.coin_unit([week.get("zins", 0)], coins.SMALL_LADDER, coins.SMALL_CAP)
+    week_pic = {"big": big, "small": small,
+                "coins": {k: coins.coins(v, small if k == "zins" else big) for k, v in week.items()}}
     deposits = active_deposits(s, user)
     cards = goals.cards([g for g in goals.list_goals(s, user.id) if not g.done_at], giro)
     hint, payout = _interest_hint(giro, today)
     return render(request, "home.html", user=user, giro=giro, deposits=deposits, top=max(cards, key=lambda c: c["pct"], default=None), week=week,
+                  week_pic=week_pic,
                   events=_events(s, user), interest_hint=hint, payout=payout, festgeld_visible=user.festgeld_enabled or bool(deposits))
 
 

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_goal.html" import visual, progress %}
-{% from "_coins.html" import pips %}
+{% from "_coins.html" import pips, stack %}
 {% block content %}
 {% if events %}{% include "_celebration.html" %}{% endif %}
 <h1 class="text-4xl font-extrabold">{{ user.avatar }} {{ t('home.hello', name=user.name) }}</h1>
@@ -26,11 +26,16 @@
 <a href="/konto/{{ giro.id }}" class="card block space-y-2">
   <div class="font-bold">📅 {{ t('week.title') }}</div>
   {% for k, cents in week.items() %}
-  <div class="flex items-center justify-between">
-    <span>{{ t('week.' ~ k) }}</span>
+  <div class="grid grid-cols-[1fr_auto] items-center gap-2">
+    <div>
+      <span>{{ t('week.' ~ k) }}</span>
+      {% if k == 'zins' %}{{ stack('small', week_pic.coins[k], tone='gold', row=True, label=cents|money) }}
+      {% else %}{{ stack('big', week_pic.coins[k], row=True, label=cents|money) }}{% endif %}
+    </div>
     <span class="text-2xl font-extrabold {{ 'text-red-600' if k == 'spent' else 'text-green-600' }}">{{ '-' if k == 'spent' else '+' }}{{ cents|money }}</span>
   </div>
   {% endfor %}
+  <p class="text-sm text-slate-500">{{ t('coin.unit', amount=week_pic.big|compact) }}{% if week.get('zins') %} · {{ t('coin.unit.small', amount=week_pic.small|compact) }}{% endif %}</p>
   <p class="lesson">{{ t('week.lesson') }}</p>
 </a>
 {% endif %}

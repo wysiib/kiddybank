@@ -348,9 +348,12 @@ def test_home_week_card(family):
     assert "Deine Woche" in home and "Von anderen" in home and "+10,00 €" in home and "Ausgegeben" not in home
     confirm(family, "/ueberweisen", to_id=account_id(1, "giro"), cents=300)
     assert "-3,00 €" in family.get("/home").text
+    card = family.get("/home").text
+    assert card.count("stack-row") == 2 and "Große Münze = 1,00 €" in card  # 10 EUR from others, 3 EUR spent: coins in a row each
     family.clock["today"] = D0 + timedelta(days=400)  # the manual bookings are old news, only interest is left
     later = family.get("/home").text
     assert "Zinsen" in later and "Von anderen" not in later and "Ausgegeben" not in later
+    assert "stack-small" in later  # the interest row uses small coins
     with Session(web._engine()) as s:
         for tx in s.exec(select(Transaction)).all():
             s.delete(tx)
