@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_goal.html" import visual, bar %}
+{% from "_goal.html" import visual, progress %}
 {% macro period_select(selected) %}
 <select class="input" name="period">{% for d in periods %}<option value="{{ d }}" {{ 'selected' if d == selected }}>{{ t('per.' ~ d) }}</option>{% endfor %}</select>
 {% endmacro %}
@@ -55,7 +55,7 @@
         {{ visual(c.goal, c.pct, 'h-16 w-16') }}
         <div class="flex-1 space-y-1">
           <div>{{ '✅ ' if c.goal.done_at }}{{ c.goal.name ~ ' · ' if c.goal.name }}{{ c.goal.target_cents|money }}</div>
-          {{ bar(c.pct) }}
+          {{ progress(c.pct, c.goal.target_cents) }}
         </div>
       </div>
       {% endfor %}

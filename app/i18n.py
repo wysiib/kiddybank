@@ -136,9 +136,11 @@ STRINGS = {
         "fg.none": "Du hast noch keine Schatztruhe.",
         # goals
         "goal.title": "Sparziele",
-        "goal.lesson": "Ein Sparziel ist etwas, worauf du sparst. Der Balken zeigt, wie nah du schon dran bist.",
+        "goal.lesson": "Ein Sparziel ist etwas, worauf du sparst. Die Plätze zeigen, wie nah du schon dran bist.",
         "goal.none": "Du hast noch kein Sparziel.",
         "goal.left": "Noch {amount} bis dahin",
+        "goal.slot": "Ein Platz = {amount}",
+        "goal.pct": "{pct} von 100 Prozent geschafft",
         "goal.reached": "Du hast genug gespart!",
         "goal.finish": "Ziel geschafft!",
         "goal.done": "Geschafft",

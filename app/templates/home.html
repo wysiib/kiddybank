@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_goal.html" import visual, bar %}
+{% from "_goal.html" import visual, progress %}
 {% from "_coins.html" import pips %}
 {% block content %}
 {% if events %}{% include "_celebration.html" %}{% endif %}
@@ -40,7 +40,7 @@
   {{ visual(top.goal, top.pct, 'h-20 w-20') }}
   <div class="flex-1 space-y-2">
     <div class="font-bold">🎯 {{ top.goal.name or t('goal.title') }}</div>
-    {{ bar(top.pct) }}
+    {{ progress(top.pct, top.goal.target_cents) }}
   </div>
 </a>
 {% endif %}

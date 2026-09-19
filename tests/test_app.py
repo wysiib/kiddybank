@@ -609,3 +609,12 @@ def test_home_counts_down_to_the_interest_payout(family):
     family.clock["today"] = D0 + timedelta(days=3)
     home = family.get("/home").text
     assert home.count("pip-on") == 3  # three of seven days are over
+
+
+def test_goal_progress_is_ten_slots(family):
+    login(family, 2, "1111")  # 10 EUR in the Giro
+    add_goal(family, name="Fahrrad", cents=3000)  # 33 % of 30 EUR
+    page = family.get("/ziele").text
+    assert page.count('class="slot slot-on"') == 3 and page.count("slot-part") == 1 and "--fill: 30%" in page
+    assert "Ein Platz = 3,00 €" in page
+    assert "slot-on" in family.get("/home").text
