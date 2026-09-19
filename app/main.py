@@ -564,6 +564,13 @@ def delete_rule(rule_id: int, user: User = Depends(parent), s: Session = Depends
     return redirect("/eltern")
 
 
+@app.post("/eltern/produkte/{product_id}/loeschen")
+def delete_product(product_id: int, user: User = Depends(parent), s: Session = Depends(get_session)):
+    if p := s.get(FestgeldProduct, product_id):
+        s.delete(p)  # safe: deposits snapshot name, rate and maturity, nothing references the product
+    return redirect("/eltern")
+
+
 @app.post("/eltern/kinder/{uid}/zins")
 def set_rate(request: Request, uid: int, rate: str = Form(...), user: User = Depends(parent),
              s: Session = Depends(get_session), today: date = Depends(get_today)):

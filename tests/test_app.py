@@ -108,6 +108,9 @@ def test_parent_configures_rates_and_kid_opens_two_deposits(family):
     login(family, 1, "1234")
     family.post("/eltern/produkte", data={"name": "Turbo", "days": 3, "rate": "50"})
     assert "Turbo" in family.get("/eltern").text
+    assert family.post("/eltern/produkte/4/loeschen").status_code == 303
+    assert "Turbo" not in family.get("/eltern").text
+    family.post("/eltern/produkte", data={"name": "Turbo", "days": 3, "rate": "50"})  # re-add (SQLite reuses id 4)
     assert family.post("/eltern/produkte", data={"name": "Kaputt", "days": 3, "rate": "500"}).status_code == 400
     family.post("/eltern/kinder/2/zins", data={"rate": "3,5"})
     assert "3,5" in family.get("/eltern").text

@@ -69,6 +69,7 @@
     <label class="block w-36">{{ t('par.product.rate') }}<input class="input" name="rate" inputmode="decimal" value="{{ p.rate_bp|pct }}" required></label>
     <label class="flex items-center gap-2 pb-4"><input type="checkbox" name="active" {{ 'checked' if p.active }}> {{ t('par.product.active') }}</label>
     <button class="btn btn-alt">{{ t('app.save') }}</button>
+    <button class="btn btn-alt" formaction="/eltern/produkte/{{ p.id }}/loeschen" formnovalidate>{{ t('par.product.delete') }}</button>
   </form>
   {% endfor %}
   <form method="post" action="/eltern/produkte" class="card flex flex-wrap items-end gap-3">
