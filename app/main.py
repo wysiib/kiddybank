@@ -41,6 +41,7 @@ templates.env.globals["locale"] = LOCALE
 templates.env.filters["money"] = format_money
 templates.env.filters["date"] = format_date
 templates.env.filters["pct"] = lambda bp: format_percent(bp)
+templates.env.filters["per"] = lambda bp, days: format_percent(ledger.period_bp(bp, days))  # annual bp -> "per week/month/year"
 
 TOWER_DEMO_CENTS = 1000  # amount the Festgeld bars show until the kid has dialled one in
 AVATARS = ["🐷", "🦊", "🐼", "🦁", "🐸", "🐙", "🦄", "🐯", "🐵", "🐰"]
@@ -123,6 +124,13 @@ def parse_percent(text: str) -> int:
         return int((Decimal(text.strip().replace(",", ".")) * 100).to_integral_value())
     except InvalidOperation:
         raise LedgerError("err.rate")
+
+
+def parse_rate(text: str, days: int) -> int:
+    """'1' per 7 days -> annual basis points."""
+    if days not in ledger.PAYOUT_PERIODS:
+        raise LedgerError("err.rate")
+    return ledger.annual_bp(parse_percent(text), days)
 
 
 def valid_pin(pin: str) -> None:
@@ -334,7 +342,8 @@ def festgeld_page(request: Request, user: User = Depends(kid), s: Session = Depe
     rows = [{"acc": a, "status": ledger.festgeld_status(a, today), "days": (a.maturity_date - today).days,
              "payout": ledger.festgeld_payout(a)} for a in deposits]
     products, towers = offer_towers(s, user, 0)
-    return render(request, "festgeld.html", user=user, rows=rows, products=products, towers=towers, error=error)
+    return render(request, "festgeld.html", user=user, rows=rows, products=products, towers=towers, error=error,
+                  days=ledger.get_account(s, user.id, "giro").payout_days)
 
 
 def offer_towers(s: Session, user: User, cents: int):
@@ -470,9 +479,9 @@ def _parent_page(request: Request, s: Session, user: User, error: str | None = N
     rules = [{"rule": r, "kid": s.get(User, s.get(Account, r.to_account_id).user_id)}
              for r in s.exec(select(RecurringRule).order_by(RecurringRule.id)).all()]
     return render(request, "parent.html", 200 if not error else 400, user=user, kids=kids, accounts=accounts,
-                  giro_rates={k.id: a.interest_rate_bp for k, a in accounts},
+                  giros={k.id: a for k, a in accounts}, periods=ledger.PAYOUT_PERIODS,
                   products=s.exec(select(FestgeldProduct).order_by(FestgeldProduct.term_days)).all(),
-                  default_rate=ledger.DEFAULT_GIRO_BP, rules=rules, avatars=AVATARS, error=error,
+                  default_rate=ledger.DEFAULT_GIRO_BP, default_days=ledger.DEFAULT_PAYOUT_DAYS, rules=rules, avatars=AVATARS, error=error,
                   goals={k.id: _goal_cards(ledger.list_goals(s, k.id), acc) for k, acc in accounts})
 
 
@@ -492,15 +501,16 @@ def kid_statement(request: Request, uid: int, user: User = Depends(parent), s: S
 
 @app.post("/eltern/kinder")
 def add_kid(request: Request, name: str = Form(...), pin: str = Form(...), avatar: str = Form("🐷"),
-            rate: str = Form(""), festgeld: str | None = Form(None), stocks: str | None = Form(None),
-            user: User = Depends(parent),
+            rate: str = Form(""), period: int = Form(ledger.DEFAULT_PAYOUT_DAYS), festgeld: str | None = Form(None),
+            stocks: str | None = Form(None), user: User = Depends(parent),
             s: Session = Depends(get_session), today: date = Depends(get_today)):
     try:
         valid_pin(pin)
         if not name.strip():
             raise LedgerError("err.name")
         k = ledger.create_user(s, name.strip(), "child", pin, avatar, today,
-                               giro_rate_bp=parse_percent(rate) if rate.strip() else ledger.DEFAULT_GIRO_BP)
+                               giro_rate_bp=parse_rate(rate, period) if rate.strip() else ledger.DEFAULT_GIRO_BP,
+                               payout_days=period)
     except LedgerError as e:
         s.rollback()
         return _parent_page(request, s, user, e.args[0])
@@ -509,15 +519,18 @@ def add_kid(request: Request, name: str = Form(...), pin: str = Form(...), avata
 
 
 @app.post("/eltern/kinder/{uid}/module")
-def set_modules(request: Request, uid: int, rate: str = Form(""), festgeld: str | None = Form(None),
-                stocks: str | None = Form(None), avatar: str = Form(""), user: User = Depends(parent),
+def set_modules(request: Request, uid: int, rate: str = Form(""), period: int = Form(0),
+                festgeld: str | None = Form(None), stocks: str | None = Form(None), avatar: str = Form(""),
+                user: User = Depends(parent),
                 s: Session = Depends(get_session), today: date = Depends(get_today)):
     k = s.get(User, uid)
     if not k or k.role != "child":
         raise HTTPException(404)
     if rate.strip():
         try:
-            ledger.set_giro_rate(s, ledger.get_account(s, k.id, "giro"), parse_percent(rate), today)
+            giro = ledger.get_account(s, k.id, "giro")
+            days = period or giro.payout_days
+            ledger.set_giro_rate(s, giro, parse_rate(rate, days), today, days)
         except LedgerError as e:
             s.rollback()
             return _parent_page(request, s, user, e.args[0])
@@ -594,9 +607,9 @@ def delete_product(product_id: int, user: User = Depends(parent), s: Session = D
 
 @app.post("/eltern/produkte")
 def add_product(request: Request, name: str = Form(...), days: int = Form(...), rate: str = Form(...),
-                user: User = Depends(parent), s: Session = Depends(get_session)):
+                period: int = Form(ledger.DEFAULT_PAYOUT_DAYS), user: User = Depends(parent), s: Session = Depends(get_session)):
     try:
-        ledger.add_product(s, name, days, parse_percent(rate))
+        ledger.add_product(s, name, days, parse_rate(rate, period), period)
     except LedgerError as e:
         s.rollback()
         return _parent_page(request, s, user, e.args[0])
@@ -612,9 +625,9 @@ def delete_product(product_id: int, user: User = Depends(parent), s: Session = D
 
 @app.post("/eltern/produkte")
 def add_product(request: Request, name: str = Form(...), days: int = Form(...), rate: str = Form(...),
-                user: User = Depends(parent), s: Session = Depends(get_session)):
+                period: int = Form(ledger.DEFAULT_PAYOUT_DAYS), user: User = Depends(parent), s: Session = Depends(get_session)):
     try:
-        ledger.add_product(s, name, days, parse_percent(rate))
+        ledger.add_product(s, name, days, parse_rate(rate, period), period)
     except LedgerError as e:
         s.rollback()
         return _parent_page(request, s, user, e.args[0])

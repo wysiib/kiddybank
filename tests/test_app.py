@@ -106,15 +106,16 @@ def test_interest_celebration_shows_until_seen(family):
 
 def test_parent_configures_rates_and_kid_opens_two_deposits(family):
     login(family, 1, "1234")
-    family.post("/eltern/produkte", data={"name": "Turbo", "days": 3, "rate": "50"})
+    family.post("/eltern/produkte", data={"name": "Turbo", "days": 3, "rate": "50", "period": 365})
     assert "Turbo" in family.get("/eltern").text
     assert family.post("/eltern/produkte/4/loeschen").status_code == 303
     assert "Turbo" not in family.get("/eltern").text
-    family.post("/eltern/produkte", data={"name": "Turbo", "days": 3, "rate": "50"})  # re-add (SQLite reuses id 4)
-    assert family.post("/eltern/produkte", data={"name": "Kaputt", "days": 3, "rate": "500"}).status_code == 400
-    assert family.post("/eltern/kinder/2/module", data={"rate": "500", "festgeld": "on"}).status_code == 400
-    family.post("/eltern/kinder/2/module", data={"rate": "3,5", "festgeld": "on"})
-    assert "3,5" in family.get("/eltern").text
+    family.post("/eltern/produkte", data={"name": "Turbo", "days": 3, "rate": "50", "period": 365})  # re-add (SQLite reuses id 4)
+    assert family.post("/eltern/produkte", data={"name": "Kaputt", "days": 3, "rate": "6000", "period": 365}).status_code == 400
+    assert family.post("/eltern/kinder/2/module", data={"rate": "101", "festgeld": "on"}).status_code == 400  # > 100 % per week
+    family.post("/eltern/kinder/2/module", data={"rate": "0,04", "festgeld": "on"})  # per week, Mia's period
+    parent_page = family.get("/eltern").text
+    assert "0,04" in parent_page and "2,09 % pro Jahr" in parent_page and "1,5 % pro Woche" in parent_page
 
     login(family, 2, "1111")
     home = family.get("/home").text
@@ -122,10 +123,10 @@ def test_parent_configures_rates_and_kid_opens_two_deposits(family):
     family.post("/festgeld/oeffnen", data={"cents": 300, "product_id": 1})
     family.post("/festgeld/oeffnen", data={"cents": 400, "product_id": 4})  # the new "Turbo" product
     page = family.get("/festgeld").text
-    assert "2 Cent" in page  # bars start from the 10 EUR demo amount: Kurz pays 2 Cent, this kid's Giro 0
+    assert "15 Cent" in page  # bars start from the 10 EUR demo amount: Kurz (1,5 % per week) pays 15 Cent, this kid's Giro 0
     bars = family.get("/festgeld/vorschau", params={"cents": 10_000, "product_id": 1}).text  # 100 EUR
-    assert 'id="towers-1"' in bars and "23 Cent" in bars and "6 Cent" in bars  # Kurz 12 % for 7 days vs 3,5 % Giro
-    assert 'id="towers-4"' in bars and "41 Cent" in bars  # Turbo 50 % for 3 days, and every tile is refreshed
+    assert 'id="towers-1"' in bars and "1,50 €" in bars and "4 Cent" in bars  # Kurz 1,5 % for a week vs 0,04 % Giro
+    assert 'id="towers-4"' in bars and "41 Cent" in bars  # Turbo 50 %/year for 3 days, and every tile is refreshed
     assert "Kurz" in page and "Turbo" in page and page.count("Noch 7 Tage") == 1 and "Noch 3 Tage" in page
 
     def offers():  # what the kid can pick from, i.e. the part of the page after the "new deposit" heading

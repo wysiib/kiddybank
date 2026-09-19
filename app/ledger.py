@@ -12,40 +12,55 @@ from .auth import hash_pin
 from .models import Account, FestgeldProduct, Goal, RecurringRule, Transaction, User
 
 INTEREST_DENOM = 10_000 * 365  # interest_accrued unit: 1 cent
-INTEREST_PAYOUT_DAYS = 7  # interest is booked at most weekly, so celebrations stay special
+PAYOUT_PERIODS = (7, 30, 365)  # a parent picks per kid how often interest is booked; rates are entered per that period
+DEFAULT_PAYOUT_DAYS = 7
+
+
+def annual_bp(period_bp: int, days: int) -> int:
+    """'1 % per week' (100 bp, 7) -> annual basis points, the only unit that is stored."""
+    return round(period_bp * 365 / days)
+
+
+def period_bp(annual: int, days: int) -> int:
+    return round(annual * days / 365)
+
+
 # Defaults only, everything below is editable by a parent. Deliberately high for kids: 10 EUR must
-# visibly earn something within weeks.
-DEFAULT_GIRO_BP = 200
-DEFAULT_PRODUCTS = (("Kurz", 7, 1200), ("Mittel", 14, 1500), ("Lang", 30, 2000))  # name, term days, rate bp
-MAX_RATE_BP = 10_000  # 100 % per year
+# visibly earn something within a week.
+DEFAULT_GIRO_BP = annual_bp(100, 7)  # 1 % per week
+DEFAULT_PRODUCTS = (("Kurz", 7, annual_bp(150, 7)), ("Mittel", 14, annual_bp(200, 7)),
+                    ("Lang", 30, annual_bp(300, 7)))  # name, term days, rate bp; entered per week
+MAX_RATE_BP = annual_bp(10_000, 7)  # 100 % per week
 
 
 class LedgerError(Exception):
     """args[0] is an i18n key."""
 
 
-def _check_rate(rate_bp: int) -> None:
-    if not 0 <= rate_bp <= MAX_RATE_BP:
+def _check_rate(rate_bp: int, days: int = DEFAULT_PAYOUT_DAYS) -> None:
+    if not 0 <= rate_bp <= MAX_RATE_BP or days not in PAYOUT_PERIODS:
         raise LedgerError("err.rate")
 
 
 def create_user(s: Session, name: str, role: str, pin: str, avatar: str = "🐷", today: date | None = None,
-                giro_rate_bp: int = DEFAULT_GIRO_BP) -> User:
+                giro_rate_bp: int = DEFAULT_GIRO_BP, payout_days: int = DEFAULT_PAYOUT_DAYS) -> User:
     today = today or date.today()
     rate = giro_rate_bp if role == "child" else 0  # a parent's account is not part of the interest lesson
-    _check_rate(rate)
+    _check_rate(rate, payout_days)
     u = User(name=name, role=role, pin_hash=hash_pin(pin), avatar=avatar)
     s.add(u)
     s.flush()
-    s.add(Account(user_id=u.id, type="giro", interest_rate_bp=rate, last_updated=today, interest_paid_on=today))
+    s.add(Account(user_id=u.id, type="giro", interest_rate_bp=rate, payout_days=payout_days,
+                     last_updated=today, interest_paid_on=today))
     s.flush()
     return u
 
 
-def set_giro_rate(s: Session, giro: Account, rate_bp: int, today: date) -> None:
-    _check_rate(rate_bp)
+def set_giro_rate(s: Session, giro: Account, rate_bp: int, today: date, payout_days: int | None = None) -> None:
+    payout_days = payout_days or giro.payout_days
+    _check_rate(rate_bp, payout_days)
     ensure_up_to_date(s, giro, today)  # settle interest at the old rate first
-    giro.interest_rate_bp = rate_bp
+    giro.interest_rate_bp, giro.payout_days = rate_bp, payout_days
 
 
 def get_account(s: Session, user_id: int, type: str) -> Account:
@@ -110,6 +125,11 @@ def catch_up_user(s: Session, user_id: int, today: date) -> None:
         ensure_up_to_date(s, acc, today)
 
 
+def _round_cents(units: int) -> int:
+    """Nearest cent, not floor: '1 % per week' is stored as 5214 bp/year (5214.29 exactly) and must still pay 1,00 on 100."""
+    return (units + INTEREST_DENOM // 2) // INTEREST_DENOM
+
+
 def accrue_interest(s: Session, acc: Account, today: date) -> None:
     days = (today - acc.last_updated).days
     if days <= 0:
@@ -117,18 +137,19 @@ def accrue_interest(s: Session, acc: Account, today: date) -> None:
     if acc.balance_cents > 0:
         acc.interest_accrued += acc.balance_cents * acc.interest_rate_bp * days
     acc.last_updated = today
-    if (today - acc.interest_paid_on).days >= INTEREST_PAYOUT_DAYS:
-        cents, acc.interest_accrued = divmod(acc.interest_accrued, INTEREST_DENOM)
+    if (today - acc.interest_paid_on).days >= acc.payout_days:
+        cents = _round_cents(acc.interest_accrued)
+        acc.interest_accrued -= cents * INTEREST_DENOM  # carry may be slightly negative after rounding up
         acc.interest_paid_on = today
         if cents:
             post(s, None, acc, cents, "zins", now=datetime.combine(today, time(0)))
 
 
 def next_interest(acc: Account, today: date) -> tuple[int, int]:
-    """(days until the next weekly payout, cents expected then if the balance stays as it is). Call after catch-up."""
-    days = max((acc.interest_paid_on + timedelta(days=INTEREST_PAYOUT_DAYS) - today).days, 1)
+    """(days until the next payout, cents expected then if the balance stays as it is). Call after catch-up."""
+    days = max((acc.interest_paid_on + timedelta(days=acc.payout_days) - today).days, 1)
     total = acc.interest_accrued + max(acc.balance_cents, 0) * acc.interest_rate_bp * days
-    return days, total // INTEREST_DENOM
+    return days, _round_cents(total)
 
 
 def _next_run(d: date, interval: str) -> date:
@@ -163,17 +184,17 @@ def run_recurring(s: Session, acc: Account, today: date) -> None:
 
 # --- festgeld ----------------------------------------------------------------------------------
 
-def _check_product(name: str, term_days: int, rate_bp: int) -> None:
+def _check_product(name: str, term_days: int, rate_bp: int, rate_days: int) -> None:
     if not name.strip():
         raise LedgerError("err.name")
     if not 1 <= term_days <= 3650:
         raise LedgerError("err.term")
-    _check_rate(rate_bp)
+    _check_rate(rate_bp, rate_days)
 
 
-def add_product(s: Session, name: str, term_days: int, rate_bp: int) -> FestgeldProduct:
-    _check_product(name, term_days, rate_bp)
-    p = FestgeldProduct(name=name.strip(), term_days=term_days, rate_bp=rate_bp)
+def add_product(s: Session, name: str, term_days: int, rate_bp: int, rate_days: int = 365) -> FestgeldProduct:
+    _check_product(name, term_days, rate_bp, rate_days)
+    p = FestgeldProduct(name=name.strip(), term_days=term_days, rate_bp=rate_bp, rate_days=rate_days)
     s.add(p)
     s.flush()
     return p
@@ -182,7 +203,7 @@ def add_product(s: Session, name: str, term_days: int, rate_bp: int) -> Festgeld
 def seed_default_products(s: Session) -> None:
     if not s.exec(select(FestgeldProduct)).first():
         for name, days, bp in DEFAULT_PRODUCTS:
-            add_product(s, name, days, bp)
+            add_product(s, name, days, bp, rate_days=DEFAULT_PAYOUT_DAYS)
 
 
 def open_festgeld(s: Session, giro: Account, cents: int, product: FestgeldProduct, today: date) -> Account:
@@ -204,7 +225,7 @@ def festgeld_status(fg: Account, today: date) -> str:
 
 
 def interest_cents(cents: int, rate_bp: int, days: int) -> int:
-    return cents * rate_bp * days // INTEREST_DENOM
+    return _round_cents(cents * rate_bp * days)
 
 
 def festgeld_payout(fg: Account) -> tuple[int, int]:

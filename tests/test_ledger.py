@@ -74,6 +74,43 @@ def test_interest_is_weekly_exact_and_idempotent(s, kids):
     assert s.exec(select(Transaction).where(Transaction.type == "zins")).all().__len__() == 1
 
 
+def test_monthly_and_yearly_payout_periods(s):
+    ann = ledger.create_user(s, "Ann", "child", "1111", today=D0, giro_rate_bp=1000, payout_days=30)
+    sp = giro(s, ann)
+    sp.balance_cents = 10_000
+    ledger.ensure_up_to_date(s, sp, D0 + timedelta(days=29))
+    assert sp.balance_cents == 10_000  # a week has passed four times, but she is paid monthly
+    assert ledger.next_interest(sp, D0 + timedelta(days=29)) == (1, 82)  # 30 days of 10 %/year on 100 EUR
+    ledger.ensure_up_to_date(s, sp, D0 + timedelta(days=30))
+    assert sp.balance_cents == 10_082
+
+    ledger.set_giro_rate(s, sp, 1000, D0 + timedelta(days=30), payout_days=365)  # switching settles first
+    ledger.ensure_up_to_date(s, sp, D0 + timedelta(days=364))
+    assert sp.balance_cents == 10_082
+    ledger.ensure_up_to_date(s, sp, D0 + timedelta(days=395))
+    assert sp.balance_cents == 10_082 + 1008  # 10082 * 10 % * 365/365 = 1008.2 cents
+    with pytest.raises(LedgerError, match="err.rate"):
+        ledger.set_giro_rate(s, sp, 1000, D0 + timedelta(days=396), payout_days=14)
+
+
+def test_rate_per_period_converts_to_annual_and_back():
+    assert ledger.annual_bp(100, 7) == 5214  # 1 % per week
+    for days in ledger.PAYOUT_PERIODS:
+        for bp in (50, 100, 300, 10_000):
+            assert ledger.period_bp(ledger.annual_bp(bp, days), days) == bp  # what the parent typed comes back
+    assert ledger.annual_bp(10_000, 7) <= ledger.MAX_RATE_BP < ledger.annual_bp(10_100, 7)  # cap: 100 % per week
+
+
+def test_one_percent_per_week_pays_exactly_one_percent(s):
+    kid = ledger.create_user(s, "Ann", "child", "1111", today=D0)  # default: 1 % per week
+    sp = giro(s, kid)
+    sp.balance_cents = 10_000
+    assert ledger.next_interest(sp, D0)[1] == 100  # 5214 bp/year is 1 % minus a hair, still 1,00 EUR
+    ledger.ensure_up_to_date(s, sp, D0 + timedelta(days=7))
+    assert sp.balance_cents == 10_100
+    assert ledger.interest_cents(10_000, ledger.annual_bp(150, 7), 7) == 150  # same for Festgeld
+
+
 def test_next_interest_predicts_the_weekly_payout(s, kids):
     sp = giro(s, kids[0])
     sp.balance_cents = 10_000  # 100 EUR at 10 %/year = 19.17 cents/week
@@ -124,9 +161,9 @@ def test_festgeld_lock_collect_and_payout(s, kids, kurz):
     maturity = D0 + timedelta(days=7)
     assert ledger.festgeld_status(fg, maturity) == "ready"
     total, interest = ledger.festgeld_payout(fg)
-    assert interest == 11  # 5000 * 12% * 7/365 = 11.5 cents, rounded down
-    assert ledger.collect_festgeld(s, fg, maturity) == total == 5_011
-    assert giro(s, mia).balance_cents == 5_000 + 5_011 and fg.balance_cents == 0
+    assert interest == 12  # 5000 * 12% * 7/365 = 11.51 cents, rounded to the nearest cent
+    assert ledger.collect_festgeld(s, fg, maturity) == total == 5_012
+    assert giro(s, mia).balance_cents == 5_000 + 5_012 and fg.balance_cents == 0
     assert ledger.festgeld_status(fg, maturity) == "collected"
 
     with pytest.raises(LedgerError, match="err.already_collected"):
@@ -144,7 +181,7 @@ def test_several_deposits_at_once_keep_their_own_rate(s, kids, kurz):
 
     lang.rate_bp = 500  # a later rate change must not touch open deposits
     assert b.interest_rate_bp == 2000
-    assert ledger.festgeld_payout(b)[1] == 4_000 * 2000 * 30 // ledger.INTEREST_DENOM
+    assert ledger.festgeld_payout(b)[1] == 66  # 4000 * 20% * 30/365 = 65.75 cents, the old rate
 
     ledger.collect_festgeld(s, a, D0 + timedelta(days=7))  # collecting one leaves the other locked
     assert ledger.festgeld_status(b, D0 + timedelta(days=7)) == "locked"
@@ -160,11 +197,14 @@ def test_rate_change_settles_interest_at_the_old_rate_first(s, kids):
 
 
 def test_rates_and_products_are_validated(s, kids):
-    for bad in (-1, 10_001):
+    for bad in (-1, ledger.MAX_RATE_BP + 1):
         with pytest.raises(LedgerError, match="err.rate"):
             ledger.set_giro_rate(s, giro(s, kids[0]), bad, D0)
         with pytest.raises(LedgerError, match="err.rate"):
             ledger.add_product(s, "X", 7, bad)
+    with pytest.raises(LedgerError, match="err.rate"):
+        ledger.add_product(s, "X", 7, 100, rate_days=14)
+    assert ledger.add_product(s, "X", 7, 100, rate_days=7).rate_days == 7
     with pytest.raises(LedgerError, match="err.term"):
         ledger.add_product(s, "X", 0, 100)
     with pytest.raises(LedgerError, match="err.name"):

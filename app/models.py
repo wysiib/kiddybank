@@ -22,6 +22,7 @@ class FestgeldProduct(SQLModel, table=True):
     name: str
     term_days: int
     rate_bp: int  # basis points per year
+    rate_days: int = 365  # unit the parent entered the rate in (7/30/365), display only
 
 
 class Account(SQLModel, table=True):
@@ -37,6 +38,7 @@ class Account(SQLModel, table=True):
     last_updated: date  # interest accrued up to this day
     interest_accrued: int = 0  # cent * 10000 * 365, exact remainder carried between payouts
     interest_paid_on: date  # last day interest was booked
+    payout_days: int = 7  # giro: days between interest payouts (7/30/365), also the unit the kid sees rates in
     opened_at: date | None = None  # festgeld only
     maturity_date: date | None = None  # festgeld only
     collected_at: datetime | None = None  # festgeld only

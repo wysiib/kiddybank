@@ -7,7 +7,7 @@
 
 {% for r in rows %}
 <div class="card space-y-3 text-center">
-  <p class="text-base text-slate-500">{{ r.acc.name }} · {{ r.acc.interest_rate_bp|pct }} %</p>
+  <p class="text-base text-slate-500">{{ r.acc.name }} · {{ r.acc.interest_rate_bp|per(days) }} % {{ t('per.' ~ days) }}</p>
   {% if r.status == 'ready' %}
   <div class="pop text-7xl">🎁</div>
   <p class="text-2xl font-extrabold">{{ t('fg.ready') }}</p>

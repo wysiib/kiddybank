@@ -1,5 +1,8 @@
 {% extends "base.html" %}
 {% from "_goal.html" import visual, bar %}
+{% macro period_select(selected) %}
+<select class="input" name="period">{% for d in periods %}<option value="{{ d }}" {{ 'selected' if d == selected }}>{{ t('per.' ~ d) }}</option>{% endfor %}</select>
+{% endmacro %}
 {% block content %}
 <h1 class="text-3xl font-extrabold">{{ user.avatar }} {{ t('par.title') }}</h1>
 {% if error %}<p class="error">{{ t(error) }}</p>{% endif %}
@@ -10,9 +13,14 @@
   <div class="card space-y-3">
     <div class="flex items-center gap-4"><span class="text-4xl">{{ k.avatar }}</span><span class="flex-1 font-bold">{{ k.name }}</span><a href="/eltern/kinder/{{ k.id }}/konto" class="btn btn-alt">📒 {{ t('stmt.title') }}</a></div>
     <form method="post" action="/eltern/kinder/{{ k.id }}/module" class="flex flex-wrap items-center gap-4">
-      <label class="block w-full">{{ t('par.rate') }}
-        <input class="input" name="rate" inputmode="decimal" value="{{ giro_rates[k.id]|pct }}" required>
-      </label>
+      {% set g = giros[k.id] %}
+      <div class="flex w-full gap-2">
+        <label class="block flex-1">{{ t('par.rate') }}
+          <input class="input" name="rate" inputmode="decimal" value="{{ g.interest_rate_bp|per(g.payout_days) }}" required>
+        </label>
+        <label class="block w-40">&nbsp;{{ period_select(g.payout_days) }}</label>
+      </div>
+      <p class="lesson w-full">{{ t('par.rate.hint') }} {{ t('par.rate.annual', pct=g.interest_rate_bp|pct) }}</p>
       <div class="flex w-full flex-wrap gap-2">
         {% for a in avatars %}
         <label class="choice rounded-2xl bg-white p-2 text-3xl shadow"><input type="radio" name="avatar" value="{{ a }}" class="sr-only" {{ 'checked' if a == k.avatar }}>{{ a }}</label>
@@ -42,7 +50,11 @@
     <h3 class="font-bold">{{ t('par.add_kid') }}</h3>
     <label class="block">{{ t('par.name') }}<input class="input" name="name" required></label>
     <label class="block">{{ t('par.pin') }}<input class="input" name="pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" required></label>
-    <label class="block">{{ t('par.rate') }}<input class="input" name="rate" inputmode="decimal" value="{{ default_rate|pct }}" required></label>
+    <div class="flex gap-2">
+      <label class="block flex-1">{{ t('par.rate') }}<input class="input" name="rate" inputmode="decimal" value="{{ default_rate|per(default_days) }}" required></label>
+      <label class="block w-40">&nbsp;{{ period_select(default_days) }}</label>
+    </div>
+    <p class="lesson">{{ t('par.rate.hint') }}</p>
     <div>{{ t('par.avatar') }}
       <div class="flex flex-wrap gap-2">
         {% for a in avatars %}
@@ -61,14 +73,15 @@
   <p class="lesson">{{ t('par.product.hint') }}</p>
   {% for p in products %}
   <form method="post" action="/eltern/produkte/{{ p.id }}/loeschen" class="card flex items-center gap-3">
-    <span class="flex-1 font-bold">{{ p.name }} · {{ t('fg.days.1') if p.term_days == 1 else t('fg.days', n=p.term_days) }} · {{ p.rate_bp|pct }} %</span>
+    <span class="flex-1 font-bold">{{ p.name }} · {{ t('fg.days.1') if p.term_days == 1 else t('fg.days', n=p.term_days) }} · {{ p.rate_bp|per(p.rate_days) }} % {{ t('per.' ~ p.rate_days) }}{{ ' (' ~ t('par.rate.annual', pct=p.rate_bp|pct) ~ ')' if p.rate_days != 365 }}</span>
     <button class="btn btn-alt">{{ t('par.product.delete') }}</button>
   </form>
   {% endfor %}
   <form method="post" action="/eltern/produkte" class="card flex flex-wrap items-end gap-3">
     <label class="block flex-1">{{ t('par.product.name') }}<input class="input" name="name" required></label>
     <label class="block w-28">{{ t('par.product.days') }}<input class="input" name="days" type="number" min="1" required></label>
-    <label class="block w-36">{{ t('par.product.rate') }}<input class="input" name="rate" inputmode="decimal" required></label>
+    <label class="block w-28">{{ t('par.product.rate') }}<input class="input" name="rate" inputmode="decimal" required></label>
+    <label class="block w-36">&nbsp;{{ period_select(default_days) }}</label>
     <button class="btn">{{ t('par.product.add') }}</button>
   </form>
 </section>
