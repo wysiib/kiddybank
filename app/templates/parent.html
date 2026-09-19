@@ -55,8 +55,9 @@
     {% endif %}
   </div>
   {% endfor %}
-  <form method="post" action="/eltern/kinder" class="card space-y-3">
-    <h3 class="font-bold">{{ t('par.add_kid') }}</h3>
+  <details>
+  <summary class="btn btn-alt cursor-pointer">{{ t('par.add_kid') }}</summary>
+  <form method="post" action="/eltern/kinder" class="card mt-3 space-y-3">
     <label class="block">{{ t('par.name') }}<input class="input" name="name" required></label>
     <label class="block">{{ t('par.pin') }}<input class="input" name="pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" required></label>
     {{ rate_row(default_rate, default_days) }}
@@ -65,6 +66,7 @@
     {{ module_boxes(true, true) }}
     <button class="btn">{{ t('par.add_kid') }}</button>
   </form>
+  </details>
 </section>
 
 <section class="space-y-3">
