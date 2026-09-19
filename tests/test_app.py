@@ -230,3 +230,11 @@ def test_goal_home_card_and_celebration_once(family):
     family.post("/gesehen")
     assert "dein Ziel erreicht" not in family.get("/home").text
     assert "Ziel geschafft" in family.get("/ziele").text  # still reachable, button waits
+
+
+def test_parent_sees_kids_goals(family):
+    login(family, 2, "1111")
+    family.post("/ziele", data={"name": "Lego", "cents": 2000}, files={"photo": ("g.jpg", JPEG, "image/jpeg")})
+    login(family, 1, "1234")
+    page = family.get("/eltern").text
+    assert "Lego" in page and "/ziele/1/bild" in page and "20,00 €" in page

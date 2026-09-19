@@ -162,6 +162,7 @@ STRINGS = {
         **{f"wd.{i}": n for i, n in enumerate(["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"])},
         "par.rule.add": "Dauerauftrag anlegen",
         "par.rule.delete": "Löschen",
+        "par.goals": "Sparziele",
     },
 }
 

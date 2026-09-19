@@ -448,7 +448,8 @@ def _parent_page(request: Request, s: Session, user: User, error: str | None = N
     return render(request, "parent.html", 200 if not error else 400, user=user, kids=kids, accounts=accounts,
                   giro_rates={k.id: a.interest_rate_bp for k, a in accounts},
                   products=s.exec(select(FestgeldProduct).order_by(FestgeldProduct.term_days)).all(),
-                  default_rate=ledger.DEFAULT_GIRO_BP, rules=rules, avatars=AVATARS, error=error)
+                  default_rate=ledger.DEFAULT_GIRO_BP, rules=rules, avatars=AVATARS, error=error,
+                  goals={k.id: _goal_cards(ledger.list_goals(s, k.id), acc) for k, acc in accounts})
 
 
 @app.get("/eltern")
