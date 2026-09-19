@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from fastapi.responses import Response
 from sqlmodel import Session
 
-from .. import festgeld, goals, ledger
+from .. import coins, festgeld, goals, ledger
 from ..i18n import format_money, t
 from ..ledger import LedgerError
 from ..models import Account, FestgeldProduct, Goal, User
@@ -30,12 +30,24 @@ GOAL_EMOJIS = ["🎯", "🧸", "🚲", "⚽", "🎮", "📚", "🎁", "✈️", 
 
 # --- kid: festgeld -----------------------------------------------------------------------------
 
+def _deposit_row(a: Account, today: date) -> dict:
+    """One open deposit with what its card draws: deposit and interest as coins, elapsed time as dots."""
+    total, left = (a.maturity_date - a.opened_at).days, (a.maturity_date - today).days
+    payout = festgeld.festgeld_payout(a)
+    big = coins.coin_unit([a.balance_cents])
+    small = coins.coin_unit([payout[1]], coins.SMALL_LADDER, coins.SMALL_CAP)
+    unit = coins.time_unit(total)
+    return {"acc": a, "status": festgeld.festgeld_status(a, today), "days": left, "payout": payout,
+            "big": big, "small": small, "deposit_coins": coins.coins(a.balance_cents, big),
+            "interest_coins": coins.coins(payout[1], small), "unit": unit,
+            "pips": (-(-total // unit), max(0, total - left) // unit)}
+
+
 def _festgeld_page(request: Request, s: Session, user: User, today: date, error: str | None = None):
     deposits = active_deposits(s, user)
     if not user.festgeld_enabled and not deposits:
         raise HTTPException(403, "err.module_off")
-    rows = [{"acc": a, "status": festgeld.festgeld_status(a, today), "days": (a.maturity_date - today).days,
-             "payout": festgeld.festgeld_payout(a)} for a in deposits]
+    rows = [_deposit_row(a, today) for a in deposits]
     products, view = festgeld.offer_stacks(s, ledger.get_account(s, user.id, "giro"), 0)
     return render(request, "festgeld.html", user=user, rows=rows, products=products, view=view, error=error,
                   tok=issue_token(request, "festgeld"), days=ledger.get_account(s, user.id, "giro").payout_days)

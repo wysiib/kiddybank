@@ -111,6 +111,21 @@ def test_festgeld_flow_and_module_switch(family):
     assert "/festgeld" not in family.get("/home").text  # tile is gone
 
 
+def test_festgeld_locked_and_ready_show_stacks(family):
+    login(family, 2, "1111")
+    open_deposit(family, 1000, 1)  # 10 EUR, Kurz: 7 days, 15 Cent interest
+    mine = lambda: family.get("/festgeld").text.split("Neue Schatztruhe")[0]  # noqa: E731  the deposit card, not the offers
+    locked = mine()
+    assert locked.count('<i class="coin"></i>') == 10 and locked.count("coin-ghost") == 3  # 10 EUR now, 3 x 5 Cent still to come
+    assert 'class="pips"' in locked and "Große Münze = 1,00 €" in locked and "Kleine Münze = 5 Cent" in locked
+    assert "Noch 7 Tage" in locked
+
+    family.clock["today"] = D0 + timedelta(days=7)
+    ready = mine()
+    assert ready.count('<i class="coin"></i>') == 13 and "coin-ghost" not in ready  # the interest is solid gold now
+    assert "Fertig!" in ready and "Abholen" in ready
+
+
 def test_festgeld_offers_show_term_as_calendars_and_interest_as_coins(family):
     login(family, 2, "1111")
     page = family.get("/festgeld").text.split("Neue Schatztruhe")[1]
