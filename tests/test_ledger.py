@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
 
 import pytest
 from sqlalchemy.exc import IntegrityError
@@ -264,7 +264,7 @@ def test_prices_deterministic_idempotent_and_floored(tmp_path):
             histories.append([p.price_cents for p in s.exec(select(PriceHistory).order_by(PriceHistory.date))])
     assert histories[0] == histories[1] and len(histories[0]) == 61  # one row per day, incl. the start day
     assert min(histories[0]) >= market.MIN_PRICE_CENTS
-    assert all(abs(b - a) <= a * 0.051 + 1 for a, b in zip(histories[0], histories[0][1:]))
+    assert all(abs(b - a) <= a * 0.051 + 1 for a, b in zip(histories[0], histories[0][1:], strict=False))
 
 
 def test_buy_and_sell(s, kids):
@@ -359,7 +359,6 @@ def test_goal_already_affordable_has_no_celebration(s, kids):
 
 
 def test_week_summary_buckets_and_window(s, kids, kurz):
-    from datetime import datetime, time
     mia, tom = kids
     sp = giro(s, mia)
     at = lambda days: datetime.combine(D0 - timedelta(days=days), time(9))  # noqa: E731

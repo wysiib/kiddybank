@@ -5,8 +5,8 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
-from app import auth, goals, ledger, main, web
-from app.models import RecurringRule, Transaction, User
+from app import auth, goals, ledger, main, market, web
+from app.models import FestgeldProduct, RecurringRule, Transaction, User
 
 D0 = date(2026, 1, 1)
 
@@ -32,6 +32,11 @@ def login(c, uid, pin):
 def account_id(user_id, type):
     with Session(web._engine()) as s:
         return ledger.get_account(s, user_id, type).id
+
+
+def product_id(name):
+    with Session(web._engine()) as s:
+        return s.exec(select(FestgeldProduct).where(FestgeldProduct.name == name)).one().id
 
 
 def token(r):
@@ -122,9 +127,9 @@ def test_parent_configures_rates_and_kid_opens_two_deposits(family):
     login(family, 1, "1234")
     family.post("/eltern/produkte", data={"name": "Turbo", "days": 3, "rate": "50", "period": 365})
     assert "Turbo" in family.get("/eltern").text
-    assert family.post("/eltern/produkte/4/loeschen").status_code == 303
+    assert family.post(f"/eltern/produkte/{product_id('Turbo')}/loeschen").status_code == 303
     assert "Turbo" not in family.get("/eltern").text
-    family.post("/eltern/produkte", data={"name": "Turbo", "days": 3, "rate": "50", "period": 365})  # re-add (SQLite reuses id 4)
+    family.post("/eltern/produkte", data={"name": "Turbo", "days": 3, "rate": "50", "period": 365})  # re-add
     assert family.post("/eltern/produkte", data={"name": "Kaputt", "days": 3, "rate": "6000", "period": 365}).status_code == 400
     assert family.post("/eltern/kinder/2", data={"rate": "101", "festgeld": "on"}).status_code == 400  # > 100 % per week
     family.post("/eltern/kinder/2", data={"rate": "0,04", "festgeld": "on"})  # per week, Mia's period
@@ -135,12 +140,13 @@ def test_parent_configures_rates_and_kid_opens_two_deposits(family):
     home = family.get("/home").text
     assert "Zinsen im Jahr" not in home and "bekommst du etwa" not in home  # empty balance: nothing to promise
     open_deposit(family, 300, 1)
-    open_deposit(family, 400, 4)  # the new "Turbo" product
+    turbo = product_id("Turbo")
+    open_deposit(family, 400, turbo)  # the new "Turbo" product
     page = family.get("/festgeld").text
     assert "15 Cent" in page  # bars start from the 10 EUR demo amount: Kurz (1,5 % per week) pays 15 Cent, this kid's Giro 0
     bars = family.get("/festgeld/vorschau", params={"cents": 10_000, "product_id": 1}).text  # 100 EUR
     assert 'id="towers-1"' in bars and "1,50 €" in bars and "4 Cent" in bars  # Kurz 1,5 % for a week vs 0,04 % Giro
-    assert 'id="towers-4"' in bars and "41 Cent" in bars  # Turbo 50 %/year for 3 days, and every tile is refreshed
+    assert f'id="towers-{turbo}"' in bars and "41 Cent" in bars  # Turbo 50 %/year for 3 days, and every tile is refreshed
     assert "Kurz" in page and "Turbo" in page and page.count("Noch 7 Tage") == 1 and "Noch 3 Tage" in page
 
     def offers():  # what the kid can pick from, i.e. the part of the page after the "new deposit" heading
@@ -148,7 +154,7 @@ def test_parent_configures_rates_and_kid_opens_two_deposits(family):
 
     assert "Turbo" in offers()
     login(family, 1, "1234")  # deleting hides it from kids; the open deposit is unaffected
-    family.post("/eltern/produkte/4/loeschen")
+    family.post(f"/eltern/produkte/{turbo}/loeschen")
     login(family, 2, "1111")
     assert "Turbo" not in offers() and "Kurz" in offers()
     assert "Turbo" in family.get("/festgeld").text  # still shown on the deposit card
@@ -486,3 +492,20 @@ def test_static_assets_are_versioned_so_the_cache_first_worker_cannot_go_stale(c
     m = re.search(r'href="(/static/app\.css\?v=\d+)"', page)
     assert m and re.search(r'src="/static/app\.js\?v=\d+"', page)
     assert client.get(m.group(1)).status_code == 200
+
+
+def test_statement_names_every_kind_of_booking(family):
+    login(family, 2, "1111")
+    open_deposit(family, 300, 1)
+    family.clock["today"] = D0 + timedelta(days=7)
+    family.post(f"/festgeld/{account_id(2, 'festgeld')}/abholen")
+    confirm(family, "/ueberweisen", to_id=account_id(1, "giro"), cents=100)
+    with Session(web._engine()) as s:
+        st = market.add_stock(s, "BIKE", "Bike Co", "🚲", 100, family.clock["today"])
+        market.buy(s, 2, st.id, 1, family.clock["today"])
+        market.sell(s, 2, st.id, 1, family.clock["today"])
+        s.commit()
+    page = family.get(f"/konto/{account_id(2, 'giro')}").text
+    for text in ("In die Schatztruhe", "Aus der Schatztruhe", "Überweisung an Mama", "Eltern haben Geld eingezahlt",
+                 "Aktie gekauft (BIKE)", "Aktie verkauft (BIKE)", "Zinsen"):
+        assert text in page, text
