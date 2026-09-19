@@ -22,7 +22,7 @@ Done: **Sparziele** (spec and plan in `docs/superpowers/`).
 - **Lesson on old statement lines.** Tap a line for a one-sentence explanation ("Zinsen: die Bank
   bezahlt dich fürs Warten"). Celebrations do this now, statements do not.
 - **Festgeld countdown on the home tile.** "noch 3 Tage 🔒" or 🎁 when ready, so Abholen is hard to miss.
-- **Parent view of a kid's statement.** `/eltern` has no per-kid history; parents cannot see what a kid did.
+- ~~**Parent view of a kid's statement.**~~ Done: `/eltern/kinder/{uid}/konto` (Giro only, reuses `statement.html`).
 - **Kid-facing stocks.** `market.py` and the tables exist and are tested; only the UI is missing.
   Lesson: prices can go down. Gate on `stocks_enabled`, probably for the 7-8 year olds.
 

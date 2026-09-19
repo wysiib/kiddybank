@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<h1 class="text-3xl font-extrabold">{{ t('stmt.title') }}: {{ acc.name or t('acct.' ~ acc.type) }}</h1>
+<h1 class="text-3xl font-extrabold">{{ who.avatar ~ ' ' ~ who.name ~ ' · ' if who }}{{ t('stmt.title') }}: {{ acc.name or t('acct.' ~ acc.type) }}</h1>
 <div class="card">
   <div class="text-base text-slate-500">{{ t('stmt.balance') }}</div>
   <div class="text-5xl font-extrabold">{{ acc.balance_cents|money }}</div>
@@ -19,5 +19,5 @@
 {% else %}
 <p class="lesson">{{ t('stmt.empty') }}</p>
 {% endfor %}
-<a href="/home" class="btn btn-alt">↩️ {{ t('app.back') }}</a>
+<a href="{{ '/eltern' if who else '/home' }}" class="btn btn-alt">↩️ {{ t('app.back') }}</a>
 {% endblock %}

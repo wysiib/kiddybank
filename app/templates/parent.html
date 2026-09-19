@@ -8,7 +8,7 @@
   <h2 class="text-2xl font-extrabold">{{ t('par.kids') }}</h2>
   {% for k in kids %}
   <div class="card space-y-3">
-    <div class="flex items-center gap-4"><span class="text-4xl">{{ k.avatar }}</span><span class="flex-1 font-bold">{{ k.name }}</span></div>
+    <div class="flex items-center gap-4"><span class="text-4xl">{{ k.avatar }}</span><span class="flex-1 font-bold">{{ k.name }}</span><a href="/eltern/kinder/{{ k.id }}/konto" class="btn btn-alt">📒 {{ t('stmt.title') }}</a></div>
     <form method="post" action="/eltern/kinder/{{ k.id }}/zins" class="flex flex-wrap items-end gap-3">
       <label class="block flex-1">{{ t('par.rate') }}
         <input class="input" name="rate" inputmode="decimal" value="{{ giro_rates[k.id]|pct }}" required>

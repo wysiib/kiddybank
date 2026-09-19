@@ -253,15 +253,18 @@ def _describe(s: Session, acc: Account, tx, delta: int) -> tuple[str, str]:
     return "💸", t("tx.transfer.in" if inbound else "tx.transfer.out", name=name)
 
 
+def _statement_rows(s: Session, acc: Account) -> list[dict]:
+    return [{"emoji": e, "text": txt, "tx": tx, "delta": delta, "balance": bal}
+            for tx, delta, bal in ledger.statement(s, acc)
+            for e, txt in [_describe(s, acc, tx, delta)]]
+
+
 @app.get("/konto/{account_id}")
 def statement(request: Request, account_id: int, user: User = Depends(kid), s: Session = Depends(get_session)):
     acc = s.get(Account, account_id)
     if not acc or acc.user_id != user.id:
         raise HTTPException(404)
-    rows = [{"emoji": e, "text": txt, "tx": tx, "delta": delta, "balance": bal}
-            for tx, delta, bal in ledger.statement(s, acc)
-            for e, txt in [_describe(s, acc, tx, delta)]]
-    return render(request, "statement.html", user=user, acc=acc, rows=rows)
+    return render(request, "statement.html", user=user, acc=acc, rows=_statement_rows(s, acc), who=None)
 
 
 # --- kid: transfer -----------------------------------------------------------------------------
@@ -455,6 +458,15 @@ def _parent_page(request: Request, s: Session, user: User, error: str | None = N
 @app.get("/eltern")
 def parent_page(request: Request, user: User = Depends(parent), s: Session = Depends(get_session)):
     return _parent_page(request, s, user)
+
+
+@app.get("/eltern/kinder/{uid}/konto")
+def kid_statement(request: Request, uid: int, user: User = Depends(parent), s: Session = Depends(get_session)):
+    kid_user = s.get(User, uid)
+    if not kid_user or kid_user.role != "child":
+        raise HTTPException(404)
+    acc = ledger.get_account(s, uid, "giro")
+    return render(request, "statement.html", user=user, acc=acc, rows=_statement_rows(s, acc), who=kid_user)
 
 
 @app.post("/eltern/kinder")

@@ -248,3 +248,28 @@ def test_parent_sees_kids_goals(family):
     login(family, 1, "1234")
     page = family.get("/eltern").text
     assert "Lego" in page and "/ziele/1/bild" in page and "20,00 €" in page
+
+
+def test_parent_sees_kid_statement(family):
+    login(family, 1, "1234")
+    page = family.get("/eltern/kinder/2/konto")
+    assert page.status_code == 200
+    assert "Mia" in page.text and "Eltern haben Geld eingezahlt" in page.text and "10,00 €" in page.text
+    assert 'href="/eltern"' in page.text
+    assert family.get("/eltern/kinder/1/konto").status_code == 404  # a parent, not a kid
+    assert family.get("/eltern/kinder/99/konto").status_code == 404
+    login(family, 2, "1111")
+    assert family.get("/eltern/kinder/2/konto").status_code == 403
+
+
+def test_parent_catch_up_keeps_kid_celebrations(family):
+    family.post("/eltern/dauerauftrag", data={"kid_id": 2, "amount": "2,00", "interval": "weekly", "weekday": 4})
+    family.clock["today"] = D0 + timedelta(days=30)
+    login(family, 1, "1234")
+    assert "Taschengeld" in family.get("/eltern/kinder/2/konto").text  # the parent's visit booked it
+    login(family, 2, "1111")
+    home = family.get("/home").text
+    assert "Zinsen bekommen" in home and "Taschengeld" in home  # still unseen, kid gets the celebration
+    family.post("/gesehen")
+    home = family.get("/home").text
+    assert "Zinsen bekommen" not in home
