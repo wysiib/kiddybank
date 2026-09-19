@@ -495,11 +495,18 @@ def add_kid(request: Request, name: str = Form(...), pin: str = Form(...), avata
 
 
 @app.post("/eltern/kinder/{uid}/module")
-def set_modules(uid: int, festgeld: str | None = Form(None), stocks: str | None = Form(None),
-                avatar: str = Form(""), user: User = Depends(parent), s: Session = Depends(get_session)):
+def set_modules(request: Request, uid: int, rate: str = Form(""), festgeld: str | None = Form(None),
+                stocks: str | None = Form(None), avatar: str = Form(""), user: User = Depends(parent),
+                s: Session = Depends(get_session), today: date = Depends(get_today)):
     k = s.get(User, uid)
     if not k or k.role != "child":
         raise HTTPException(404)
+    if rate.strip():
+        try:
+            ledger.set_giro_rate(s, ledger.get_account(s, k.id, "giro"), parse_percent(rate), today)
+        except LedgerError as e:
+            s.rollback()
+            return _parent_page(request, s, user, e.args[0])
     k.festgeld_enabled, k.stocks_enabled = festgeld is not None, stocks is not None
     if avatar in AVATARS:
         k.avatar = avatar
@@ -568,20 +575,6 @@ def delete_rule(rule_id: int, user: User = Depends(parent), s: Session = Depends
 def delete_product(product_id: int, user: User = Depends(parent), s: Session = Depends(get_session)):
     if p := s.get(FestgeldProduct, product_id):
         s.delete(p)  # safe: deposits snapshot name, rate and maturity, nothing references the product
-    return redirect("/eltern")
-
-
-@app.post("/eltern/kinder/{uid}/zins")
-def set_rate(request: Request, uid: int, rate: str = Form(...), user: User = Depends(parent),
-             s: Session = Depends(get_session), today: date = Depends(get_today)):
-    k = s.get(User, uid)
-    if not k or k.role != "child":
-        raise HTTPException(404)
-    try:
-        ledger.set_giro_rate(s, ledger.get_account(s, k.id, "giro"), parse_percent(rate), today)
-    except LedgerError as e:
-        s.rollback()
-        return _parent_page(request, s, user, e.args[0])
     return redirect("/eltern")
 
 

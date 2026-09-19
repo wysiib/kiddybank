@@ -9,13 +9,10 @@
   {% for k in kids %}
   <div class="card space-y-3">
     <div class="flex items-center gap-4"><span class="text-4xl">{{ k.avatar }}</span><span class="flex-1 font-bold">{{ k.name }}</span><a href="/eltern/kinder/{{ k.id }}/konto" class="btn btn-alt">📒 {{ t('stmt.title') }}</a></div>
-    <form method="post" action="/eltern/kinder/{{ k.id }}/zins" class="flex flex-wrap items-end gap-3">
-      <label class="block flex-1">{{ t('par.rate') }}
+    <form method="post" action="/eltern/kinder/{{ k.id }}/module" class="flex flex-wrap items-center gap-4">
+      <label class="block w-full">{{ t('par.rate') }}
         <input class="input" name="rate" inputmode="decimal" value="{{ giro_rates[k.id]|pct }}" required>
       </label>
-      <button class="btn btn-alt">{{ t('par.rate.save') }}</button>
-    </form>
-    <form method="post" action="/eltern/kinder/{{ k.id }}/module" class="flex flex-wrap items-center gap-4">
       <div class="flex w-full flex-wrap gap-2">
         {% for a in avatars %}
         <label class="choice rounded-2xl bg-white p-2 text-3xl shadow"><input type="radio" name="avatar" value="{{ a }}" class="sr-only" {{ 'checked' if a == k.avatar }}>{{ a }}</label>

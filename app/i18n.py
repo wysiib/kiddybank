@@ -148,7 +148,6 @@ STRINGS = {
         "par.avatar": "Bild",
         "par.pin": "Code (4 Zahlen)",
         "par.rate": "Zinsen pro Jahr (%)",
-        "par.rate.save": "Zinsen ändern",
         "par.products": "Schatztruhen-Angebote (Festgeld)",
         "par.product.name": "Name",
         "par.product.days": "Tage",
