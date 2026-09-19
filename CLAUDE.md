@@ -41,6 +41,11 @@ Layering: `main.py` (routes, form parsing, view models) → `ledger.py` / `marke
 
 **Tests** — `tests/test_ledger.py` calls ledger/market functions directly against a temp SQLite DB. `tests/test_app.py` drives real routes with `TestClient`; its `client` fixture points `DB_URL` at a temp file, clears the `_engine` cache and overrides `get_today`; the `family` fixture creates a parent and a kid through the routes.
 
+## Design docs and backlog
+
+- `docs/ideas.md`: backlog of feature ideas that are not designed yet. Start here when asked what to build next. When an idea gets a spec, mark it done or in progress there.
+- `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`: approved design specs, one per feature (currently `2026-09-19-sparziele-design.md`). Read the matching spec before implementing or changing that feature; it records the owner's decisions and what was deliberately left out. Implementation plans, if written, go next to them.
+
 ## Product constraints (decided by the owner, check new features against these)
 
 - All UI text goes through `t()` in `app/i18n.py` (German today, structured for more locales). No hardcoded user-facing strings in routes or templates.
