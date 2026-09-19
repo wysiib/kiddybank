@@ -203,10 +203,13 @@ def festgeld_status(fg: Account, today: date) -> str:
     return "ready" if today >= fg.maturity_date else "locked"
 
 
+def interest_cents(cents: int, rate_bp: int, days: int) -> int:
+    return cents * rate_bp * days // INTEREST_DENOM
+
+
 def festgeld_payout(fg: Account) -> tuple[int, int]:
     """(total, interest) if collected at maturity. Same function feeds the preview and the booking."""
-    term = (fg.maturity_date - fg.opened_at).days
-    interest = fg.balance_cents * fg.interest_rate_bp * term // INTEREST_DENOM
+    interest = interest_cents(fg.balance_cents, fg.interest_rate_bp, (fg.maturity_date - fg.opened_at).days)
     return fg.balance_cents + interest, interest
 
 

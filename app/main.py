@@ -42,6 +42,7 @@ templates.env.filters["money"] = format_money
 templates.env.filters["date"] = format_date
 templates.env.filters["pct"] = lambda bp: format_percent(bp)
 
+TOWER_DEMO_CENTS = 1000  # amount the Festgeld bars show until the kid has dialled one in
 AVATARS = ["🐷", "🦊", "🐼", "🦁", "🐸", "🐙", "🦄", "🐯", "🐵", "🐰"]
 GOAL_EMOJIS = ["🎯", "🧸", "🚲", "⚽", "🎮", "📚", "🎁", "✈️", "🐶", "🍦"]
 
@@ -332,21 +333,34 @@ def festgeld_page(request: Request, user: User = Depends(kid), s: Session = Depe
         raise HTTPException(403, t("err.module_off"))
     rows = [{"acc": a, "status": ledger.festgeld_status(a, today), "days": (a.maturity_date - today).days,
              "payout": ledger.festgeld_payout(a)} for a in deposits]
+    products, towers = offer_towers(s, user, 0)
+    return render(request, "festgeld.html", user=user, rows=rows, products=products, towers=towers, error=error)
+
+
+def offer_towers(s: Session, user: User, cents: int):
+    """The offers plus, per offer, the bonus a Giro vs. that offer would pay on `cents` and the bar heights (0-100, one shared scale)."""
     products = s.exec(select(FestgeldProduct).order_by(FestgeldProduct.term_days)).all()
     giro_bp = ledger.get_account(s, user.id, "giro").interest_rate_bp
-    return render(request, "festgeld.html", user=user, rows=rows, products=products, giro_bp=giro_bp, error=error)
+    cents = cents if cents > 0 else TOWER_DEMO_CENTS
+    bonus = {p.id: (ledger.interest_cents(cents, giro_bp, p.term_days), ledger.interest_cents(cents, p.rate_bp, p.term_days))
+             for p in products}
+    top = max((b for pair in bonus.values() for b in pair), default=0)
+    height = lambda b: max(8, b * 100 // top) if b else 0  # a tiny bonus still gets a visible stub
+    return products, {pid: {"giro": g, "fg": f, "giro_h": height(g), "fg_h": height(f)} for pid, (g, f) in bonus.items()}
 
 
 @app.get("/festgeld/vorschau")
 def festgeld_preview(request: Request, cents: int = 0, product_id: int = 0, user: User = Depends(kid),
                      s: Session = Depends(get_session), today: date = Depends(get_today)):
     product = s.get(FestgeldProduct, product_id)
+    products, towers = offer_towers(s, user, cents)
+    ctx = dict(oob=True, products=products, towers=towers)  # also refreshes the bars in every offer tile
     if cents <= 0 or not product:
-        return render(request, "_preview.html", total=None)
+        return render(request, "_preview.html", total=None, **ctx)
     fake = Account(user_id=user.id, type="festgeld", balance_cents=cents, interest_rate_bp=product.rate_bp,
                    last_updated=today, interest_paid_on=today, opened_at=today,
                    maturity_date=today + timedelta(days=product.term_days))
-    return render(request, "_preview.html", total=ledger.festgeld_payout(fake)[0])
+    return render(request, "_preview.html", total=ledger.festgeld_payout(fake)[0], **ctx)
 
 
 @app.post("/festgeld/oeffnen")

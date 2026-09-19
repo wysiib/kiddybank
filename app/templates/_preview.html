@@ -1,3 +1,4 @@
 <div class="lesson">
   {% if total %}{{ t('fg.preview', total=total|money) }}{% else %}{{ t('fg.preview.empty') }}{% endif %}
 </div>
+{% if oob %}{% for p in products %}<div id="towers-{{ p.id }}" hx-swap-oob="true">{% include "_towers.html" %}</div>{% endfor %}{% endif %}
