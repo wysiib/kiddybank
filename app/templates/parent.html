@@ -84,7 +84,7 @@
   {% for r in rules %}
   <form method="post" action="/eltern/dauerauftrag/{{ r.rule.id }}/loeschen" class="card flex items-center gap-4">
     <span class="text-4xl">{{ r.kid.avatar }}</span>
-    <span class="flex-1">{{ r.kid.name }}: {{ r.rule.amount_cents|money }} · {{ t('par.rule.' ~ r.rule.interval) }} · {{ r.rule.next_run|date }}</span>
+    <span class="flex-1">{{ r.kid.name }}: {{ r.rule.amount_cents|money }} · {{ t('par.rule.' ~ r.rule.interval) }} · {{ t('wd.' ~ r.rule.next_run.weekday()) }}, {{ r.rule.next_run|date }}</span>
     <button class="btn btn-alt">{{ t('par.rule.delete') }}</button>
   </form>
   {% endfor %}
@@ -96,7 +96,12 @@
     <label class="block">{{ t('par.rule.interval') }}
       <select class="input" name="interval"><option value="weekly">{{ t('par.rule.weekly') }}</option><option value="monthly">{{ t('par.rule.monthly') }}</option></select>
     </label>
-    <label class="block">{{ t('par.rule.start') }}<input class="input" type="date" name="start" value="{{ next_week.isoformat() }}" required></label>
+    <label class="block">{{ t('par.rule.weekday') }}
+      <select class="input" name="weekday">{% for i in range(7) %}<option value="{{ i }}">{{ t('wd.' ~ i) }}</option>{% endfor %}</select>
+    </label>
+    <label class="block">{{ t('par.rule.monthday') }}
+      <select class="input" name="monthday">{% for i in range(1, 29) %}<option value="{{ i }}">{{ i }}.</option>{% endfor %}</select>
+    </label>
     <button class="btn">{{ t('par.rule.add') }}</button>
   </form>
 </section>

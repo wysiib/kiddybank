@@ -2,7 +2,7 @@ from datetime import date, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app import ledger, main
 
@@ -136,3 +136,10 @@ def test_parent_changes_avatar(family):
     family.post("/eltern/kinder/2/module", data={"avatar": "not-an-avatar"})  # unknown values are ignored
     with Session(main._engine()) as s:
         assert s.get(main.User, 2).avatar == "🐼"
+
+
+def test_dauerauftrag_uses_chosen_weekday(family):
+    family.post("/eltern/dauerauftrag", data={"kid_id": 2, "amount": "2,00", "interval": "weekly", "weekday": 4})
+    with Session(main._engine()) as s:
+        r = s.exec(select(main.RecurringRule)).one()
+        assert r.next_run.weekday() == 4 and r.next_run > family.clock["today"]

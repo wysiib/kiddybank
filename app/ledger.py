@@ -132,6 +132,15 @@ def _next_run(d: date, interval: str) -> date:
     return date(year, month, min(d.day, calendar.monthrange(year, month)[1]))
 
 
+def first_run(interval: str, anchor: int, today: date) -> date:
+    """First payday strictly after today: weekday 0-6 (Mon-Sun) for weekly, day of month 1-28 for monthly.
+    Monthly caps at 28 so every month has the day and _next_run never drifts."""
+    if interval == "weekly":
+        return today + timedelta(days=(anchor - today.weekday()) % 7 or 7)
+    d = today.replace(day=anchor)
+    return d if d > today else _next_run(d, "monthly")
+
+
 def run_recurring(s: Session, acc: Account, today: date) -> None:
     rules = s.exec(select(RecurringRule).where(RecurringRule.to_account_id == acc.id,
                                                RecurringRule.next_run <= today)).all()

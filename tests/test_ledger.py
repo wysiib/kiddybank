@@ -220,3 +220,12 @@ def test_buy_and_sell(s, kids):
         market.sell(s, mia.id, st.id, 4, D0)
     market.sell(s, mia.id, st.id, 3, D0)
     assert giro(s, mia).balance_cents == 10_000
+
+
+def test_first_run_picks_chosen_weekday_and_day_of_month():
+    wed = date(2026, 9, 16)  # a Wednesday
+    assert ledger.first_run("weekly", 2, wed) == date(2026, 9, 23)  # same weekday: next week, not today
+    assert ledger.first_run("weekly", 0, wed) == date(2026, 9, 21)
+    assert ledger.first_run("monthly", 20, wed) == date(2026, 9, 20)
+    assert ledger.first_run("monthly", 16, wed) == date(2026, 10, 16)
+    assert ledger.first_run("monthly", 5, date(2026, 12, 30)) == date(2027, 1, 5)

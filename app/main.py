@@ -377,7 +377,7 @@ def _parent_page(request: Request, s: Session, user: User, error: str | None = N
     return render(request, "parent.html", 200 if not error else 400, user=user, kids=kids, accounts=accounts,
                   giro_rates={k.id: a.interest_rate_bp for k, a in accounts},
                   products=s.exec(select(FestgeldProduct).order_by(FestgeldProduct.term_days)).all(),
-                  default_rate=ledger.DEFAULT_GIRO_BP, rules=rules, avatars=AVATARS, error=error, next_week=date.today() + timedelta(days=7))
+                  default_rate=ledger.DEFAULT_GIRO_BP, rules=rules, avatars=AVATARS, error=error)
 
 
 @app.get("/eltern")
@@ -431,14 +431,18 @@ def book(request: Request, account_id: int = Form(...), amount: str = Form(...),
 
 @app.post("/eltern/dauerauftrag")
 def add_rule(request: Request, kid_id: int = Form(...), amount: str = Form(...), interval: str = Form(...),
-             start: str = Form(...), user: User = Depends(parent), s: Session = Depends(get_session)):
+             weekday: int = Form(0), monthday: int = Form(1), user: User = Depends(parent),
+             s: Session = Depends(get_session), today: date = Depends(get_today)):
     try:
         cents = parse_euro(amount)
         if cents <= 0 or interval not in ("weekly", "monthly"):
             raise LedgerError("err.amount")
-        first = date.fromisoformat(start)
-    except (LedgerError, ValueError) as e:
-        return _parent_page(request, s, user, e.args[0] if isinstance(e, LedgerError) else "err.amount")
+        anchor = weekday if interval == "weekly" else monthday
+        if not (0 <= weekday <= 6 and 1 <= monthday <= 28):
+            raise LedgerError("err.amount")
+    except LedgerError as e:
+        return _parent_page(request, s, user, e.args[0])
+    first = ledger.first_run(interval, anchor, today)
     s.add(RecurringRule(from_account_id=None, to_account_id=ledger.get_account(s, kid_id, "giro").id,
                         amount_cents=cents, interval=interval, next_run=first))
     return redirect("/eltern")
