@@ -333,7 +333,8 @@ def festgeld_page(request: Request, user: User = Depends(kid), s: Session = Depe
     rows = [{"acc": a, "status": ledger.festgeld_status(a, today), "days": (a.maturity_date - today).days,
              "payout": ledger.festgeld_payout(a)} for a in deposits]
     products = s.exec(select(FestgeldProduct).where(FestgeldProduct.active).order_by(FestgeldProduct.term_days)).all()
-    return render(request, "festgeld.html", user=user, rows=rows, products=products, error=error)
+    giro_bp = ledger.get_account(s, user.id, "giro").interest_rate_bp
+    return render(request, "festgeld.html", user=user, rows=rows, products=products, giro_bp=giro_bp, error=error)
 
 
 @app.get("/festgeld/vorschau")

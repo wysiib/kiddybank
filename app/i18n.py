@@ -84,6 +84,8 @@ STRINGS = {
         "fg.term": "Wie lange warten?",
         "fg.days": "{n} Tage",
         "fg.days.1": "1 Tag",
+        "fg.more": "{n}-mal so viele Zinsen wie auf deinem Konto",
+        "fg.more.2": "Doppelt so viele Zinsen wie auf deinem Konto",
         "fg.no_products": "Im Moment gibt es keine Schatztruhen-Angebote.",
         "fg.preview": "Wenn du wartest, bekommst du {total}.",
         "fg.preview.empty": "Wähle einen Betrag und wie lange du wartest.",

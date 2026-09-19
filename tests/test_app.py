@@ -118,6 +118,7 @@ def test_parent_configures_rates_and_kid_opens_two_deposits(family):
     family.post("/festgeld/oeffnen", data={"cents": 300, "product_id": 1})
     family.post("/festgeld/oeffnen", data={"cents": 400, "product_id": 4})  # the new "Turbo" product
     page = family.get("/festgeld").text
+    assert "3-mal so viele Zinsen" in page and "14-mal so viele Zinsen" in page  # Kurz 12 % and Turbo 50 % vs this kid's 3,5 % Giro
     assert "Kurz" in page and "Turbo" in page and page.count("Noch 7 Tage") == 1 and "Noch 3 Tage" in page
 
     def offers():  # what the kid can pick from, i.e. the part of the page after the "new deposit" heading

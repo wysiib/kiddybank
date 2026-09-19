@@ -38,7 +38,8 @@
         <input type="radio" name="product_id" value="{{ p.id }}" class="sr-only" required>
         <span class="text-4xl">🗓️</span>{{ p.name }}
         <span class="text-base font-normal">{{ t('fg.days.1') if p.term_days == 1 else t('fg.days', n=p.term_days) }}</span>
-        <span class="text-base font-normal">{{ p.rate_bp|pct }} %</span>
+        {% set n = (p.rate_bp / giro_bp)|round|int if giro_bp else 0 %}
+        <span class="text-base font-normal">{{ t('fg.more.2') if n == 2 else t('fg.more', n=n) if n > 2 else (p.rate_bp|pct ~ ' %') }}</span>
       </label>
       {% else %}
       <p class="lesson col-span-3">{{ t('fg.no_products') }}</p>
