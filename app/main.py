@@ -75,6 +75,10 @@ def get_session():
             raise
 
 
+# scope="function": commit before the response goes out, so a failed commit is an error page, not a lost write behind a 200
+db = Depends(get_session, scope="function")
+
+
 def get_today() -> date:
     return date.today()
 
@@ -118,7 +122,7 @@ def sign_in(request: Request, user: User) -> None:
     request.session["seen"] = time.time()
 
 
-def current_user(request: Request, s: Session = Depends(get_session)) -> User:
+def current_user(request: Request, s: Session = db) -> User:
     user = s.get(User, request.session.get("uid") or 0)
     if user and user.role == "parent" and time.time() - request.session.get("seen", 0) > PARENT_IDLE:
         request.session.clear()
@@ -129,14 +133,14 @@ def current_user(request: Request, s: Session = Depends(get_session)) -> User:
     return user
 
 
-def kid(user: User = Depends(current_user), s: Session = Depends(get_session), today: date = Depends(get_today)) -> User:
+def kid(user: User = Depends(current_user), s: Session = db, today: date = Depends(get_today)) -> User:
     if user.role != "child":
         raise Redirect("/eltern")
     ledger.catch_up_user(s, user.id, today)  # lazy interest / allowance, before anything else happens
     return user
 
 
-def parent(user: User = Depends(current_user), s: Session = Depends(get_session), today: date = Depends(get_today)) -> User:
+def parent(user: User = Depends(current_user), s: Session = db, today: date = Depends(get_today)) -> User:
     if user.role != "parent":
         raise HTTPException(403, "err.forbidden")
     for k in s.exec(select(User).where(User.role == "child")).all():
@@ -211,7 +215,7 @@ def valid_pin(pin: str) -> None:
 # --- login -------------------------------------------------------------------------------------
 
 @app.get("/")
-def index(request: Request, s: Session = Depends(get_session)):
+def index(request: Request, s: Session = db):
     if not s.exec(select(User)).first():
         return redirect("/setup")
     user = s.get(User, request.session.get("uid") or 0)
@@ -221,14 +225,14 @@ def index(request: Request, s: Session = Depends(get_session)):
 
 
 @app.get("/setup")
-def setup_form(request: Request, s: Session = Depends(get_session)):
+def setup_form(request: Request, s: Session = db):
     if s.exec(select(User)).first():
         return redirect("/")
     return render(request, "setup.html")
 
 
 @app.post("/setup")
-def setup(request: Request, name: str = Form(...), pin: str = Form(...), s: Session = Depends(get_session),
+def setup(request: Request, name: str = Form(...), pin: str = Form(...), s: Session = db,
           today: date = Depends(get_today)):
     if s.exec(select(User)).first():
         return redirect("/")
@@ -245,12 +249,12 @@ def setup(request: Request, name: str = Form(...), pin: str = Form(...), s: Sess
 
 
 @app.get("/login")
-def login_picker(request: Request, s: Session = Depends(get_session)):
+def login_picker(request: Request, s: Session = db):
     return render(request, "login.html", users=s.exec(select(User).order_by(User.role.desc(), User.id)).all())  # type: ignore[attr-defined]
 
 
 @app.get("/login/{uid}")
-def pin_form(request: Request, uid: int, s: Session = Depends(get_session)):
+def pin_form(request: Request, uid: int, s: Session = db):
     user = s.get(User, uid)
     if not user:
         return redirect("/login")
@@ -258,7 +262,7 @@ def pin_form(request: Request, uid: int, s: Session = Depends(get_session)):
 
 
 @app.post("/login/{uid}")
-def pin_submit(request: Request, uid: int, pin: str = Form(...), s: Session = Depends(get_session)):
+def pin_submit(request: Request, uid: int, pin: str = Form(...), s: Session = db):
     user = s.get(User, uid)
     if not user:
         return redirect("/login")
@@ -310,7 +314,7 @@ def _interest_hint(acc: Account, today: date) -> str:
 
 
 @app.get("/home")
-def home(request: Request, user: User = Depends(kid), s: Session = Depends(get_session), today: date = Depends(get_today)):
+def home(request: Request, user: User = Depends(kid), s: Session = db, today: date = Depends(get_today)):
     giro = ledger.get_account(s, user.id, "giro")
     week = {k: v for k, v in ledger.week_summary(s, giro, today).items() if v}
     deposits = active_deposits(s, user)
@@ -320,7 +324,7 @@ def home(request: Request, user: User = Depends(kid), s: Session = Depends(get_s
 
 
 @app.post("/gesehen")
-def seen(user: User = Depends(kid), s: Session = Depends(get_session), today: date = Depends(get_today)):
+def seen(user: User = Depends(kid), s: Session = db, today: date = Depends(get_today)):
     ledger.mark_seen(s, user.id, today)
     return redirect("/home")
 
@@ -348,7 +352,7 @@ def _statement_rows(s: Session, acc: Account) -> list[dict]:
 
 
 @app.get("/konto/{account_id}")
-def statement(request: Request, account_id: int, user: User = Depends(kid), s: Session = Depends(get_session)):
+def statement(request: Request, account_id: int, user: User = Depends(kid), s: Session = db):
     acc = s.get(Account, account_id)
     if not acc or acc.user_id != user.id:
         raise HTTPException(404)
@@ -373,13 +377,13 @@ def _resolve(s: Session, user: User, to_id: int) -> tuple[Account, Account]:
 
 
 @app.get("/ueberweisen")
-def transfer_form(request: Request, user: User = Depends(kid), s: Session = Depends(get_session)):
+def transfer_form(request: Request, user: User = Depends(kid), s: Session = db):
     return _transfer_form(request, s, user)
 
 
 @app.post("/ueberweisen/pruefen")
 def transfer_check(request: Request, to_id: int = Form(...), cents: int = Form(0),
-                   user: User = Depends(kid), s: Session = Depends(get_session)):
+                   user: User = Depends(kid), s: Session = db):
     src, dst = _resolve(s, user, to_id)
     try:
         if cents <= 0:
@@ -394,7 +398,7 @@ def transfer_check(request: Request, to_id: int = Form(...), cents: int = Form(0
 
 @app.post("/ueberweisen")
 def transfer_do(request: Request, to_id: int = Form(...), cents: int = Form(...), tok: str = Form(""),
-                user: User = Depends(kid), s: Session = Depends(get_session), today: date = Depends(get_today)):
+                user: User = Depends(kid), s: Session = db, today: date = Depends(get_today)):
     src, dst = _resolve(s, user, to_id)
     if not use_token(request, "transfer", tok):  # a double tap: the first request already did it
         return redirect("/home")
@@ -420,13 +424,13 @@ def _cash_page(request: Request, s: Session, user: User, kind: str, cents: int |
 
 
 @app.get("/bar/{kind}")
-def cash_form(request: Request, kind: str, user: User = Depends(kid), s: Session = Depends(get_session)):
+def cash_form(request: Request, kind: str, user: User = Depends(kid), s: Session = db):
     return _cash_page(request, s, user, kind)
 
 
 @app.post("/bar/{kind}/pruefen")
 def cash_check(request: Request, kind: str, cents: int = Form(0), user: User = Depends(kid),
-               s: Session = Depends(get_session)):
+               s: Session = db):
     giro = ledger.get_account(s, user.id, "giro")
     if cents <= 0:
         return _cash_page(request, s, user, kind, error="err.amount")
@@ -438,7 +442,7 @@ def cash_check(request: Request, kind: str, cents: int = Form(0), user: User = D
 @app.post("/bar/{kind}")
 def cash_do(request: Request, kind: str, cents: int = Form(...), pin: str = Form(...), tok: str = Form(""),
             user: User = Depends(kid),
-            s: Session = Depends(get_session), today: date = Depends(get_today)):
+            s: Session = db, today: date = Depends(get_today)):
     giro = ledger.get_account(s, user.id, "giro")
     parents = s.exec(select(User).where(User.role == "parent")).all()
     try:
@@ -475,7 +479,7 @@ def _festgeld_page(request: Request, s: Session, user: User, today: date, error:
 
 
 @app.get("/festgeld")
-def festgeld_page(request: Request, user: User = Depends(kid), s: Session = Depends(get_session),
+def festgeld_page(request: Request, user: User = Depends(kid), s: Session = db,
                   today: date = Depends(get_today)):
     return _festgeld_page(request, s, user, today)
 
@@ -494,7 +498,7 @@ def offer_towers(s: Session, user: User, cents: int):
 
 @app.get("/festgeld/vorschau")
 def festgeld_preview(request: Request, cents: int = 0, product_id: int = 0, user: User = Depends(kid),
-                     s: Session = Depends(get_session), today: date = Depends(get_today)):
+                     s: Session = db, today: date = Depends(get_today)):
     product = s.get(FestgeldProduct, product_id)
     products, towers = offer_towers(s, user, cents)
     ctx = dict(oob=True, products=products, towers=towers)  # also refreshes the bars in every offer tile
@@ -508,7 +512,7 @@ def festgeld_preview(request: Request, cents: int = 0, product_id: int = 0, user
 
 @app.post("/festgeld/oeffnen")
 def festgeld_open(request: Request, cents: int = Form(0), product_id: int = Form(0), tok: str = Form(""),
-                  user: User = Depends(kid), s: Session = Depends(get_session), today: date = Depends(get_today)):
+                  user: User = Depends(kid), s: Session = db, today: date = Depends(get_today)):
     need_module(user, "festgeld_enabled")
     if not use_token(request, "festgeld", tok):  # a double tap: the first request already did it
         return redirect("/festgeld")
@@ -523,7 +527,7 @@ def festgeld_open(request: Request, cents: int = Form(0), product_id: int = Form
 
 
 @app.post("/festgeld/{account_id}/abholen")
-def festgeld_collect(request: Request, account_id: int, user: User = Depends(kid), s: Session = Depends(get_session),
+def festgeld_collect(request: Request, account_id: int, user: User = Depends(kid), s: Session = db,
                      today: date = Depends(get_today)):
     fg = s.get(Account, account_id)  # deliberately not gated on festgeld_enabled: never trap a kid's money
     if not fg or fg.user_id != user.id or fg.type != "festgeld":
@@ -560,13 +564,13 @@ def _own_goal(s: Session, user: User, goal_id: int) -> Goal:
 
 
 @app.get("/ziele")
-def goals_page(request: Request, user: User = Depends(kid), s: Session = Depends(get_session)):
+def goals_page(request: Request, user: User = Depends(kid), s: Session = db):
     return _goals_page(request, s, user)
 
 
 @app.post("/ziele")
 def goal_create(request: Request, name: str = Form(""), emoji: str = Form(""), cents: int = Form(0),
-                photo: UploadFile | None = File(None), user: User = Depends(kid), s: Session = Depends(get_session),
+                photo: UploadFile | None = File(None), user: User = Depends(kid), s: Session = db,
                 today: date = Depends(get_today)):
     data = photo.file.read(ledger.MAX_PHOTO_BYTES + 1) if photo else b""  # bounded read, size is checked in the ledger
     try:
@@ -577,7 +581,7 @@ def goal_create(request: Request, name: str = Form(""), emoji: str = Form(""), c
 
 
 @app.post("/ziele/{goal_id}/loeschen")
-def goal_delete(goal_id: int, user: User = Depends(kid), s: Session = Depends(get_session)):
+def goal_delete(goal_id: int, user: User = Depends(kid), s: Session = db):
     g = _own_goal(s, user, goal_id)
     if g.done_at:
         raise HTTPException(404)  # finished goals stay as a record
@@ -586,7 +590,7 @@ def goal_delete(goal_id: int, user: User = Depends(kid), s: Session = Depends(ge
 
 
 @app.post("/ziele/{goal_id}/geschafft")
-def goal_finish(request: Request, goal_id: int, user: User = Depends(kid), s: Session = Depends(get_session),
+def goal_finish(request: Request, goal_id: int, user: User = Depends(kid), s: Session = db,
                 today: date = Depends(get_today)):
     g = _own_goal(s, user, goal_id)
     try:
@@ -597,7 +601,7 @@ def goal_finish(request: Request, goal_id: int, user: User = Depends(kid), s: Se
 
 
 @app.get("/ziele/{goal_id}/bild")
-def goal_photo(goal_id: int, user: User = Depends(current_user), s: Session = Depends(get_session)):
+def goal_photo(goal_id: int, user: User = Depends(current_user), s: Session = db):
     g = s.get(Goal, goal_id)
     if not g or not g.photo or (user.role != "parent" and g.user_id != user.id):
         raise HTTPException(404)
@@ -620,12 +624,12 @@ def _parent_page(request: Request, s: Session, user: User, error: str | None = N
 
 
 @app.get("/eltern")
-def parent_page(request: Request, user: User = Depends(parent), s: Session = Depends(get_session)):
+def parent_page(request: Request, user: User = Depends(parent), s: Session = db):
     return _parent_page(request, s, user)
 
 
 @app.get("/eltern/kinder/{uid}/konto")
-def kid_statement(request: Request, uid: int, user: User = Depends(parent), s: Session = Depends(get_session)):
+def kid_statement(request: Request, uid: int, user: User = Depends(parent), s: Session = db):
     kid_user = child_or_404(s, uid)
     acc = ledger.get_account(s, uid, "giro")
     return render(request, "statement.html", user=user, acc=acc, rows=_statement_rows(s, acc), who=kid_user)
@@ -635,7 +639,7 @@ def kid_statement(request: Request, uid: int, user: User = Depends(parent), s: S
 def add_kid(request: Request, name: str = Form(...), pin: str = Form(...), avatar: str = Form("🐷"),
             rate: str = Form(""), period: int = Form(ledger.DEFAULT_PAYOUT_DAYS), festgeld: str | None = Form(None),
             stocks: str | None = Form(None), user: User = Depends(parent),
-            s: Session = Depends(get_session), today: date = Depends(get_today)):
+            s: Session = db, today: date = Depends(get_today)):
     try:
         valid_pin(pin)
         if not name.strip():
@@ -653,7 +657,7 @@ def add_kid(request: Request, name: str = Form(...), pin: str = Form(...), avata
 def set_modules(request: Request, uid: int, rate: str = Form(""), period: int = Form(0),
                 festgeld: str | None = Form(None), stocks: str | None = Form(None), avatar: str = Form(""),
                 user: User = Depends(parent),
-                s: Session = Depends(get_session), today: date = Depends(get_today)):
+                s: Session = db, today: date = Depends(get_today)):
     k = child_or_404(s, uid)
     if rate.strip():
         try:
@@ -670,7 +674,7 @@ def set_modules(request: Request, uid: int, rate: str = Form(""), period: int = 
 
 @app.post("/eltern/buchen")
 def book(request: Request, account_id: int = Form(...), amount: str = Form(...), note: str = Form(""),
-         user: User = Depends(parent), s: Session = Depends(get_session), today: date = Depends(get_today)):
+         user: User = Depends(parent), s: Session = db, today: date = Depends(get_today)):
     acc = s.get(Account, account_id)
     if not acc or acc.type != "giro":
         raise HTTPException(404)
@@ -691,7 +695,7 @@ def _rule_input(amount: str, interval: str, weekday: int, monthday: int) -> tupl
 @app.post("/eltern/dauerauftrag")
 def add_rule(request: Request, kid_id: int = Form(...), amount: str = Form(...), interval: str = Form(...),
              weekday: int = Form(0), monthday: int = Form(1), user: User = Depends(parent),
-             s: Session = Depends(get_session), today: date = Depends(get_today)):
+             s: Session = db, today: date = Depends(get_today)):
     try:
         cents, interval, anchor = _rule_input(amount, interval, weekday, monthday)
     except LedgerError as e:
@@ -704,7 +708,7 @@ def add_rule(request: Request, kid_id: int = Form(...), amount: str = Form(...),
 @app.post("/eltern/dauerauftrag/{rule_id}")
 def edit_rule(request: Request, rule_id: int, amount: str = Form(...), interval: str = Form(...),
               weekday: int = Form(0), monthday: int = Form(1), user: User = Depends(parent),
-              s: Session = Depends(get_session), today: date = Depends(get_today)):
+              s: Session = db, today: date = Depends(get_today)):
     r = s.get(RecurringRule, rule_id)
     if not r:
         raise HTTPException(404)
@@ -719,14 +723,14 @@ def edit_rule(request: Request, rule_id: int, amount: str = Form(...), interval:
 
 
 @app.post("/eltern/dauerauftrag/{rule_id}/loeschen")
-def delete_rule(rule_id: int, user: User = Depends(parent), s: Session = Depends(get_session)):
+def delete_rule(rule_id: int, user: User = Depends(parent), s: Session = db):
     if r := s.get(RecurringRule, rule_id):
         s.delete(r)
     return redirect("/eltern")
 
 
 @app.post("/eltern/produkte/{product_id}/loeschen")
-def delete_product(product_id: int, user: User = Depends(parent), s: Session = Depends(get_session)):
+def delete_product(product_id: int, user: User = Depends(parent), s: Session = db):
     if p := s.get(FestgeldProduct, product_id):
         s.delete(p)  # safe: deposits snapshot name, rate and maturity, nothing references the product
     return redirect("/eltern")
@@ -734,7 +738,7 @@ def delete_product(product_id: int, user: User = Depends(parent), s: Session = D
 
 @app.post("/eltern/produkte")
 def add_product(request: Request, name: str = Form(...), days: int = Form(...), rate: str = Form(...),
-                period: int = Form(ledger.DEFAULT_PAYOUT_DAYS), user: User = Depends(parent), s: Session = Depends(get_session)):
+                period: int = Form(ledger.DEFAULT_PAYOUT_DAYS), user: User = Depends(parent), s: Session = db):
     try:
         ledger.add_product(s, name, days, parse_rate(rate, period), period)
     except LedgerError as e:

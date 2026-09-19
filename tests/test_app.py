@@ -457,3 +457,16 @@ def test_dauerauftrag_needs_a_real_kid(family):
     for kid_id in (99, 1):  # unknown, and a parent
         r = family.post("/eltern/dauerauftrag", data={"kid_id": kid_id, "amount": "2,00", "interval": "weekly"})
         assert r.status_code == 404
+
+
+def test_failed_commit_is_an_error_not_a_lost_write_behind_a_success(family, monkeypatch):
+    login(family, 1, "1234")
+    lenient = TestClient(main.app, raise_server_exceptions=False, follow_redirects=False)
+    lenient.cookies.update(family.cookies)
+
+    def boom(self):
+        raise RuntimeError("disk full")
+
+    monkeypatch.setattr(Session, "commit", boom)
+    r = lenient.post("/eltern/buchen", data={"account_id": account_id(2, "giro"), "amount": "5,00"})
+    assert r.status_code == 500  # the client must not be told "done" before the commit happened
