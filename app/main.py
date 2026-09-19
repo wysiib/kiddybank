@@ -166,6 +166,17 @@ def own_accounts(s: Session, user: User, *types: str) -> list[Account]:
     return list(s.exec(q.order_by(Account.id)).all())
 
 
+def active_deposits(s: Session, user: User) -> list[Account]:
+    return [a for a in own_accounts(s, user, "festgeld") if not a.collected_at]
+
+
+def child_or_404(s: Session, uid: int) -> User:
+    k = s.get(User, uid)
+    if not k or k.role != "child":
+        raise HTTPException(404)
+    return k
+
+
 def _decimal_x100(text: str, err: str) -> int:
     try:
         value = Decimal(text.strip().replace(",", "."))
@@ -302,7 +313,7 @@ def _interest_hint(acc: Account, today: date) -> str:
 def home(request: Request, user: User = Depends(kid), s: Session = Depends(get_session), today: date = Depends(get_today)):
     giro = ledger.get_account(s, user.id, "giro")
     week = {k: v for k, v in ledger.week_summary(s, giro, today).items() if v}
-    deposits = [a for a in own_accounts(s, user, "festgeld") if not a.collected_at]
+    deposits = active_deposits(s, user)
     cards = _goal_cards([g for g in ledger.list_goals(s, user.id) if not g.done_at], giro)
     return render(request, "home.html", user=user, giro=giro, deposits=deposits, top=max(cards, key=lambda c: c["pct"], default=None), week=week,
                   events=_events(s, user), interest_hint=_interest_hint(giro, today), festgeld_visible=user.festgeld_enabled or bool(deposits))
@@ -452,10 +463,8 @@ def cash_do(request: Request, kind: str, cents: int = Form(...), pin: str = Form
 
 # --- kid: festgeld -----------------------------------------------------------------------------
 
-@app.get("/festgeld")
-def festgeld_page(request: Request, user: User = Depends(kid), s: Session = Depends(get_session),
-                  today: date = Depends(get_today), error: str | None = None):
-    deposits = [a for a in own_accounts(s, user, "festgeld") if not a.collected_at]
+def _festgeld_page(request: Request, s: Session, user: User, today: date, error: str | None = None):
+    deposits = active_deposits(s, user)
     if not user.festgeld_enabled and not deposits:
         raise HTTPException(403, "err.module_off")
     rows = [{"acc": a, "status": ledger.festgeld_status(a, today), "days": (a.maturity_date - today).days,
@@ -463,6 +472,12 @@ def festgeld_page(request: Request, user: User = Depends(kid), s: Session = Depe
     products, towers = offer_towers(s, user, 0)
     return render(request, "festgeld.html", user=user, rows=rows, products=products, towers=towers, error=error,
                   tok=issue_token(request, "festgeld"), days=ledger.get_account(s, user.id, "giro").payout_days)
+
+
+@app.get("/festgeld")
+def festgeld_page(request: Request, user: User = Depends(kid), s: Session = Depends(get_session),
+                  today: date = Depends(get_today)):
+    return _festgeld_page(request, s, user, today)
 
 
 def offer_towers(s: Session, user: User, cents: int):
@@ -503,7 +518,7 @@ def festgeld_open(request: Request, cents: int = Form(0), product_id: int = Form
             raise LedgerError("err.term")
         ledger.open_festgeld(s, ledger.get_account(s, user.id, "giro"), cents, product, today)
     except LedgerError as e:
-        return redirect(f"/festgeld?error={e.args[0]}")
+        return _festgeld_page(request, s, user, today, e.args[0])
     return redirect("/festgeld")
 
 
@@ -517,7 +532,7 @@ def festgeld_collect(request: Request, account_id: int, user: User = Depends(kid
     try:
         total = ledger.collect_festgeld(s, fg, today)
     except LedgerError as e:
-        return redirect(f"/festgeld?error={e.args[0]}")
+        return _festgeld_page(request, s, user, today, e.args[0])
     return render(request, "done.html", user=user, emoji="🧰", msg=t("fg.collected", total=format_money(total)),
                   lesson=t("fg.ready.lesson", interest=format_money(interest)) + " " + t("fg.collected.lesson"))
 
@@ -611,9 +626,7 @@ def parent_page(request: Request, user: User = Depends(parent), s: Session = Dep
 
 @app.get("/eltern/kinder/{uid}/konto")
 def kid_statement(request: Request, uid: int, user: User = Depends(parent), s: Session = Depends(get_session)):
-    kid_user = s.get(User, uid)
-    if not kid_user or kid_user.role != "child":
-        raise HTTPException(404)
+    kid_user = child_or_404(s, uid)
     acc = ledger.get_account(s, uid, "giro")
     return render(request, "statement.html", user=user, acc=acc, rows=_statement_rows(s, acc), who=kid_user)
 
@@ -641,9 +654,7 @@ def set_modules(request: Request, uid: int, rate: str = Form(""), period: int = 
                 festgeld: str | None = Form(None), stocks: str | None = Form(None), avatar: str = Form(""),
                 user: User = Depends(parent),
                 s: Session = Depends(get_session), today: date = Depends(get_today)):
-    k = s.get(User, uid)
-    if not k or k.role != "child":
-        raise HTTPException(404)
+    k = child_or_404(s, uid)
     if rate.strip():
         try:
             giro = ledger.get_account(s, k.id, "giro")
@@ -685,7 +696,7 @@ def add_rule(request: Request, kid_id: int = Form(...), amount: str = Form(...),
         cents, interval, anchor = _rule_input(amount, interval, weekday, monthday)
     except LedgerError as e:
         return _parent_page(request, s, user, e.args[0])
-    s.add(RecurringRule(from_account_id=None, to_account_id=ledger.get_account(s, kid_id, "giro").id,
+    s.add(RecurringRule(from_account_id=None, to_account_id=ledger.get_account(s, child_or_404(s, kid_id).id, "giro").id,
                         amount_cents=cents, interval=interval, next_run=ledger.first_run(interval, anchor, today)))
     return redirect("/eltern")
 

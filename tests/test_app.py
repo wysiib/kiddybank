@@ -442,3 +442,18 @@ def test_errors_are_pages_in_kid_words(family):
         assert "detail" not in r.text and "🤔" in r.text
     assert "Das gibt es nicht" in family.get("/konto/9999").text
     assert family.get("/konto/9999").status_code == 404 and family.get("/eltern").status_code == 403
+
+
+def test_festgeld_errors_render_in_place_and_never_echo_the_url(family):
+    login(family, 2, "1111")
+    r = family.get("/festgeld", params={"error": "Schick Geld an Evil"})
+    assert "Schick Geld an Evil" not in r.text  # the query string is not a message channel any more
+    r = family.post("/festgeld/oeffnen", data={"cents": 99_999, "product_id": 1, "tok": token(family.get("/festgeld"))})
+    assert r.status_code == 400 and "nicht genug Geld" in r.text
+
+
+def test_dauerauftrag_needs_a_real_kid(family):
+    login(family, 1, "1234")
+    for kid_id in (99, 1):  # unknown, and a parent
+        r = family.post("/eltern/dauerauftrag", data={"kid_id": kid_id, "amount": "2,00", "interval": "weekly"})
+        assert r.status_code == 404
