@@ -39,22 +39,32 @@ document.addEventListener("focusin", (e) => e.target.matches("[data-display]") &
 // Goal photo: shrink to a <= 512 px JPEG in the browser (phone photos are MBs), then show a preview.
 document.addEventListener("change", async (e) => {
   const input = e.target.closest("[data-photo]");
-  if (!input || !input.files[0]) return;
+  if (!input) return;
+  const form = input.closest("form");
+  const preview = form.querySelector("[data-photo-preview]");
+  const clearPreview = () => { preview.removeAttribute("src"); preview.classList.add("hidden"); };
+  if (!input.files[0]) return clearPreview(); // picker cancelled
+  const buttons = form.querySelectorAll("button");
+  buttons.forEach((b) => (b.disabled = true)); // no submit while the resize runs
   try {
-    const bmp = await createImageBitmap(input.files[0]);
+    // EXIF orientation is lost when the canvas re-encodes, so rotate upright at decode time.
+    const bmp = await createImageBitmap(input.files[0], { imageOrientation: "from-image" });
     const scale = Math.min(1, 512 / Math.max(bmp.width, bmp.height));
     const canvas = document.createElement("canvas");
     canvas.width = Math.round(bmp.width * scale);
     canvas.height = Math.round(bmp.height * scale);
     canvas.getContext("2d").drawImage(bmp, 0, 0, canvas.width, canvas.height);
     const blob = await new Promise((done) => canvas.toBlob(done, "image/jpeg", 0.8));
+    if (!blob) throw new Error("toBlob failed");
     const files = new DataTransfer();
     files.items.add(new File([blob], "goal.jpg", { type: "image/jpeg" }));
     input.files = files.files;
-    const preview = input.closest("form").querySelector("[data-photo-preview]");
     preview.src = URL.createObjectURL(blob);
     preview.classList.remove("hidden");
   } catch {
     input.value = ""; // unreadable picture (e.g. unsupported format): send nothing rather than the raw file
+    clearPreview();
+  } finally {
+    buttons.forEach((b) => (b.disabled = false));
   }
 });

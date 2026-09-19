@@ -162,9 +162,19 @@ def test_goal_create_photo_and_progress(family):
     img = family.get("/ziele/1/bild")
     assert img.content == JPEG and img.headers["content-type"] == "image/jpeg"
     assert img.headers["x-content-type-options"] == "nosniff"
+    assert img.headers["cache-control"] == "private, no-cache"
 
     assert add_goal(family).status_code == 303  # name only works too
     assert "Lego" in family.get("/ziele").text
+
+
+def test_goal_empty_photo_part(family):
+    # browsers send an empty "photo" part when nothing was picked
+    login(family, 2, "1111")
+    r = family.post("/ziele", data={"name": "Ball", "cents": 500}, files={"photo": ("", b"", "application/octet-stream")})
+    assert r.status_code == 303
+    page = family.get("/ziele").text
+    assert "Ball" in page and "/bild" not in page
 
 
 def test_goal_rejects_bad_input(family):
