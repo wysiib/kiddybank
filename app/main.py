@@ -7,16 +7,18 @@ from functools import lru_cache
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
 from . import ledger
 from . import auth
 from .auth import verify_pin
-from .i18n import LOCALE, format_date, format_money, format_percent, t
+from .i18n import LOCALE, STRINGS, format_date, format_money, format_percent, t
 from .ledger import LedgerError
 from .models import Account, FestgeldProduct, Goal, RecurringRule, User, make_engine
 
@@ -85,6 +87,30 @@ def redirect(url: str):
     return RedirectResponse(url, status_code=303)
 
 
+class Redirect(Exception):
+    """Raised by dependencies that send the user elsewhere (login, parent area)."""
+
+    def __init__(self, url: str):
+        self.url = url
+
+
+@app.exception_handler(Redirect)
+def _redirect(request: Request, exc: Redirect):
+    return redirect(exc.url)
+
+
+@app.exception_handler(StarletteHTTPException)
+def _http_error(request: Request, exc: StarletteHTTPException):
+    """Kids get a page in their own words, not {"detail": "Not Found"}. Raise HTTPException(status, "i18n.key")."""
+    key = exc.detail if exc.detail in STRINGS[LOCALE] else "err.notfound" if exc.status_code == 404 else "err.generic"
+    return render(request, "error.html", exc.status_code, msg=t(key))
+
+
+@app.exception_handler(RequestValidationError)
+def _bad_form(request: Request, exc: RequestValidationError):
+    return render(request, "error.html", 422, msg=t("err.generic"))
+
+
 def sign_in(request: Request, user: User) -> None:
     request.session.clear()
     request.session["uid"] = user.id
@@ -97,21 +123,21 @@ def current_user(request: Request, s: Session = Depends(get_session)) -> User:
         request.session.clear()
         user = None
     if not user:
-        raise HTTPException(303, headers={"Location": "/login"})
+        raise Redirect("/login")
     request.session["seen"] = time.time()
     return user
 
 
 def kid(user: User = Depends(current_user), s: Session = Depends(get_session), today: date = Depends(get_today)) -> User:
     if user.role != "child":
-        raise HTTPException(303, headers={"Location": "/eltern"})
+        raise Redirect("/eltern")
     ledger.catch_up_user(s, user.id, today)  # lazy interest / allowance, before anything else happens
     return user
 
 
 def parent(user: User = Depends(current_user), s: Session = Depends(get_session), today: date = Depends(get_today)) -> User:
     if user.role != "parent":
-        raise HTTPException(403, t("err.forbidden"))
+        raise HTTPException(403, "err.forbidden")
     for k in s.exec(select(User).where(User.role == "child")).all():
         ledger.catch_up_user(s, k.id, today)
     return user
@@ -129,7 +155,7 @@ def use_token(request: Request, purpose: str, tok: str) -> bool:
 
 def need_module(user: User, flag: str) -> None:
     if not getattr(user, flag):
-        raise HTTPException(403, t("err.module_off"))
+        raise HTTPException(403, "err.module_off")
 
 
 def own_accounts(s: Session, user: User, *types: str) -> list[Account]:
@@ -330,7 +356,7 @@ def _resolve(s: Session, user: User, to_id: int) -> tuple[Account, Account]:
     """(own giro, someone else's giro). Kids only ever move money out of their own Giro."""
     dst = s.get(Account, to_id)
     if not dst or dst.type != "giro" or dst.user_id == user.id:
-        raise HTTPException(403, t("err.forbidden"))
+        raise HTTPException(403, "err.forbidden")
     return ledger.get_account(s, user.id, "giro"), dst
 
 
@@ -432,7 +458,7 @@ def festgeld_page(request: Request, user: User = Depends(kid), s: Session = Depe
                   today: date = Depends(get_today), error: str | None = None):
     deposits = [a for a in own_accounts(s, user, "festgeld") if not a.collected_at]
     if not user.festgeld_enabled and not deposits:
-        raise HTTPException(403, t("err.module_off"))
+        raise HTTPException(403, "err.module_off")
     rows = [{"acc": a, "status": ledger.festgeld_status(a, today), "days": (a.maturity_date - today).days,
              "payout": ledger.festgeld_payout(a)} for a in deposits]
     products, towers = offer_towers(s, user, 0)

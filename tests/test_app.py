@@ -434,3 +434,11 @@ def test_session_secret_is_private_and_stable(tmp_path, monkeypatch):
     first = main._secret()
     assert main._secret() == first
     assert ((tmp_path / ".session_secret").stat().st_mode & 0o777) == 0o600
+
+
+def test_errors_are_pages_in_kid_words(family):
+    login(family, 2, "1111")
+    for r in (family.get("/konto/9999"), family.get("/eltern"), family.post("/ueberweisen/pruefen", data={"to_id": "x"})):
+        assert "detail" not in r.text and "🤔" in r.text
+    assert "Das gibt es nicht" in family.get("/konto/9999").text
+    assert family.get("/konto/9999").status_code == 404 and family.get("/eltern").status_code == 403
