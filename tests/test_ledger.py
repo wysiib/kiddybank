@@ -356,3 +356,15 @@ def test_week_summary_buckets_and_window(s, kids, kurz):
     assert ledger.week_summary(s, sp, D0) == {"dauerauftrag": 800, "zins": 40, "other": 700, "spent": 400}
     assert ledger.week_summary(s, giro(s, tom), D0) == {"dauerauftrag": 0, "zins": 0, "other": 150, "spent": 0}
     assert fg.balance_cents == 200
+
+
+def test_older_db_gets_added_columns(tmp_path):
+    import sqlite3
+    path = tmp_path / "old.db"
+    db = sqlite3.connect(path)
+    db.execute("CREATE TABLE account (id INTEGER PRIMARY KEY, user_id INTEGER)")  # a DB from before payout_days
+    db.commit(); db.close()
+    make_engine(f"sqlite:///{path}")
+    cols = {row[1] for row in sqlite3.connect(path).execute("PRAGMA table_info(account)")}
+    assert "payout_days" in cols
+    make_engine(f"sqlite:///{path}")  # idempotent
