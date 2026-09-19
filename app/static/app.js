@@ -19,10 +19,11 @@ document.addEventListener("click", (e) => {
   const k = e.target.closest("[data-key]");
   if (k) {
     const form = k.closest("form");
+    if (form.dataset.sent) return;
     const pin = form.querySelector("[name=pin]");
     pin.value = k.dataset.key === "back" ? pin.value.slice(0, -1) : (pin.value + k.dataset.key).slice(0, 4);
     form.querySelectorAll("[data-dot]").forEach((d, i) => d.classList.toggle("bg-pink-500", i < pin.value.length));
-    if (pin.value.length === 4) form.submit();
+    if (pin.value.length === 4) form.requestSubmit();
   }
 });
 
@@ -68,3 +69,10 @@ document.addEventListener("change", async (e) => {
     buttons.forEach((b) => (b.disabled = false));
   }
 });
+
+// Kids tap twice: a form goes out once. The server also refuses a second copy of anything that moves money.
+document.addEventListener("submit", (e) => {
+  if (e.target.dataset.sent) return e.preventDefault();
+  e.target.dataset.sent = "1";
+});
+addEventListener("pageshow", (e) => e.persisted && document.querySelectorAll("form[data-sent]").forEach((f) => delete f.dataset.sent));

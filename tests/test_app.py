@@ -1,3 +1,4 @@
+import re
 from datetime import date, timedelta
 
 import pytest
@@ -33,6 +34,19 @@ def account_id(user_id, type):
         return ledger.get_account(s, user_id, type).id
 
 
+def token(r):
+    return re.search(r'name="tok" value="([^"]+)"', r.text).group(1)
+
+
+def confirm(c, path, **data):
+    """Money moves in two steps: /pruefen shows the confirm screen (with its one-time token), then the real POST."""
+    return c.post(path, data={**data, "tok": token(c.post(path + "/pruefen", data=data))})
+
+
+def open_deposit(c, cents, product_id):
+    return c.post("/festgeld/oeffnen", data={"cents": cents, "product_id": product_id, "tok": token(c.get("/festgeld"))})
+
+
 @pytest.fixture
 def family(client):
     """Parent (id 1) and Mia (id 2) with 10 EUR, set up through the real routes."""
@@ -65,7 +79,7 @@ def test_transfer_confirm_and_insufficient(family):
 
     r = family.post("/ueberweisen/pruefen", data={**form, "cents": 300})
     assert "Vorher 10,00 €" in r.text and "Nachher 7,00 €" in r.text
-    assert "Geschafft" in family.post("/ueberweisen", data={**form, "cents": 300}).text
+    assert "Geschafft" in confirm(family, "/ueberweisen", cents=300, **form).text
     with Session(main._engine()) as s:
         assert ledger.get_account(s, 1, "giro").balance_cents == 300
 
@@ -75,7 +89,7 @@ def test_transfer_confirm_and_insufficient(family):
 
 def test_festgeld_flow_and_module_switch(family):
     login(family, 2, "1111")
-    family.post("/festgeld/oeffnen", data={"cents": 500, "product_id": 1})
+    open_deposit(family, 500, 1)
     page = family.get("/festgeld").text
     assert "Noch 7 Tage" in page and "Abholen" not in page
 
@@ -120,8 +134,8 @@ def test_parent_configures_rates_and_kid_opens_two_deposits(family):
     login(family, 2, "1111")
     home = family.get("/home").text
     assert "Zinsen im Jahr" not in home and "bekommst du etwa" not in home  # empty balance: nothing to promise
-    family.post("/festgeld/oeffnen", data={"cents": 300, "product_id": 1})
-    family.post("/festgeld/oeffnen", data={"cents": 400, "product_id": 4})  # the new "Turbo" product
+    open_deposit(family, 300, 1)
+    open_deposit(family, 400, 4)  # the new "Turbo" product
     page = family.get("/festgeld").text
     assert "15 Cent" in page  # bars start from the 10 EUR demo amount: Kurz (1,5 % per week) pays 15 Cent, this kid's Giro 0
     bars = family.get("/festgeld/vorschau", params={"cents": 10_000, "product_id": 1}).text  # 100 EUR
@@ -290,7 +304,7 @@ def test_home_week_card(family):
     login(family, 2, "1111")
     home = family.get("/home").text
     assert "Deine Woche" in home and "Von anderen" in home and "+10,00 €" in home and "Ausgegeben" not in home
-    family.post("/ueberweisen", data={"to_id": account_id(1, "giro"), "cents": 300})
+    confirm(family, "/ueberweisen", to_id=account_id(1, "giro"), cents=300)
     assert "-3,00 €" in family.get("/home").text
     family.clock["today"] = D0 + timedelta(days=400)  # the manual bookings are old news, only interest is left
     later = family.get("/home").text
@@ -324,17 +338,18 @@ def test_cash_in_and_out_need_parent_pin(family):
     assert "Vorher 10,00 €" in r.text and "Nachher 7,00 €" in r.text
     assert "verpasst du" in r.text and "Zinsen" in r.text  # withdrawing costs interest, says by how much
 
-    assert "nicht der Code" in family.post("/bar/abheben", data={"cents": 300, "pin": "1111"}).text  # kid's own PIN
+    assert "nicht der Code" in confirm(family, "/bar/abheben", cents=300, pin="1111").text  # kid's own PIN
     assert giro_cents(2) == 1000
-    assert "Abgehoben" in family.post("/bar/abheben", data={"cents": 300, "pin": "1234"}).text
+    assert "Abgehoben" in confirm(family, "/bar/abheben", cents=300, pin="1234").text
     assert giro_cents(2) == 700
 
     assert "Nachher 12,00 €" in family.post("/bar/einzahlen/pruefen", data={"cents": 500}).text
-    assert "Eingezahlt" in family.post("/bar/einzahlen", data={"cents": 500, "pin": "1234"}).text
+    assert "Eingezahlt" in confirm(family, "/bar/einzahlen", cents=500, pin="1234").text
     assert giro_cents(2) == 1200
 
     assert family.post("/bar/abheben/pruefen", data={"cents": 99999}).status_code == 400
-    assert family.post("/bar/abheben", data={"cents": 99999, "pin": "1234"}).status_code == 400
+    tok = token(family.post("/bar/abheben/pruefen", data={"cents": 300}))
+    assert family.post("/bar/abheben", data={"cents": 99999, "pin": "1234", "tok": tok}).status_code == 400  # balance changed since the check
     assert family.post("/bar/einzahlen", data={"cents": -500, "pin": "1234"}).status_code == 400  # must not flip into a withdrawal
     assert giro_cents(2) == 1200
     assert family.get("/bar/quatsch").status_code == 404
@@ -357,3 +372,26 @@ def test_absurd_amounts_are_rejected_not_crashes(family):
     login(family, 1, "1234")
     assert family.post("/eltern/buchen", data={"account_id": account_id(2, "giro"), "amount": "nan"}).status_code == 400
     assert family.post("/eltern/kinder/2/module", data={"rate": "inf"}).status_code == 400
+
+
+def test_double_tap_books_once(family):
+    login(family, 2, "1111")
+    to = account_id(1, "giro")
+    tok = token(family.post("/ueberweisen/pruefen", data={"to_id": to, "cents": 300}))
+    sent = {"to_id": to, "cents": 300, "tok": tok}
+    assert "Geschafft" in family.post("/ueberweisen", data=sent).text
+    assert family.post("/ueberweisen", data=sent).headers["location"] == "/home"  # same form again: ignored
+    assert giro_cents(2) == 700
+
+    tok = token(family.post("/bar/abheben/pruefen", data={"cents": 200}))
+    sent = {"cents": 200, "pin": "1234", "tok": tok}
+    family.post("/bar/abheben", data=sent)
+    family.post("/bar/abheben", data=sent)
+    assert giro_cents(2) == 500
+
+    tok = token(family.get("/festgeld"))
+    sent = {"cents": 100, "product_id": 1, "tok": tok}
+    family.post("/festgeld/oeffnen", data=sent)
+    family.post("/festgeld/oeffnen", data=sent)
+    assert giro_cents(2) == 400
+    assert family.post("/festgeld/oeffnen", data={"cents": 100, "product_id": 1}).headers["location"] == "/festgeld"  # no token at all

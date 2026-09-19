@@ -99,6 +99,16 @@ def parent(user: User = Depends(current_user), s: Session = Depends(get_session)
     return user
 
 
+def issue_token(request: Request, purpose: str) -> str:
+    """One-time token for a form that moves money: a double tap posts it twice, only the first one counts."""
+    tok = request.session[f"tok:{purpose}"] = secrets.token_hex(8)
+    return tok
+
+
+def use_token(request: Request, purpose: str, tok: str) -> bool:
+    return bool(tok) and request.session.pop(f"tok:{purpose}", None) == tok
+
+
 def need_module(user: User, flag: str) -> None:
     if not getattr(user, flag):
         raise HTTPException(403, t("err.module_off"))
@@ -320,13 +330,15 @@ def transfer_check(request: Request, to_id: int = Form(...), cents: int = Form(0
     except LedgerError as e:
         return _transfer_form(request, s, user, e.args[0])
     return render(request, "transfer_confirm.html", user=user, src=src, dst=dst, cents=cents,
-                  to_name=s.get(User, dst.user_id).name)
+                  to_name=s.get(User, dst.user_id).name, tok=issue_token(request, "transfer"))
 
 
 @app.post("/ueberweisen")
-def transfer_do(request: Request, to_id: int = Form(...), cents: int = Form(...),
+def transfer_do(request: Request, to_id: int = Form(...), cents: int = Form(...), tok: str = Form(""),
                 user: User = Depends(kid), s: Session = Depends(get_session), today: date = Depends(get_today)):
     src, dst = _resolve(s, user, to_id)
+    if not use_token(request, "transfer", tok):  # a double tap: the first request already did it
+        return redirect("/home")
     try:
         ledger.transfer(s, src, dst, cents, today)
     except LedgerError as e:
@@ -346,7 +358,7 @@ def _cash_page(request: Request, s: Session, user: User, kind: str, cents: int |
     giro = ledger.get_account(s, user.id, "giro")
     lost = ledger.interest_cents(cents or 0, giro.interest_rate_bp, giro.payout_days) if kind == "abheben" else 0
     return render(request, "cash.html", 400 if error else 200, user=user, giro=giro, kind=kind, cents=cents,
-                  lost=lost, error=error)
+                  lost=lost, error=error, tok=issue_token(request, "cash") if cents else None)
 
 
 @app.get("/bar/{kind}")
@@ -366,15 +378,19 @@ def cash_check(request: Request, kind: str, cents: int = Form(0), user: User = D
 
 
 @app.post("/bar/{kind}")
-def cash_do(request: Request, kind: str, cents: int = Form(...), pin: str = Form(...), user: User = Depends(kid),
+def cash_do(request: Request, kind: str, cents: int = Form(...), pin: str = Form(...), tok: str = Form(""),
+            user: User = Depends(kid),
             s: Session = Depends(get_session), today: date = Depends(get_today)):
     giro = ledger.get_account(s, user.id, "giro")
     parents = s.exec(select(User).where(User.role == "parent")).all()
     try:
-        if kind not in CASH or cents <= 0:  # a negative amount would flip the direction of the booking
+        if kind not in CASH:
             raise LedgerError("err.amount")
+        ledger.check_amount(cents)  # a negative amount would flip the direction of the booking
         if not any(verify_pin(pin, p.pin_hash) for p in parents):
             raise LedgerError("cash.pin.wrong")
+        if not use_token(request, "cash", tok):  # a double tap: the first request already did it
+            return redirect("/home")
         ledger.manual_booking(s, giro, cents if kind == "einzahlen" else -cents, today)
     except LedgerError as e:
         s.rollback()
@@ -396,7 +412,7 @@ def festgeld_page(request: Request, user: User = Depends(kid), s: Session = Depe
              "payout": ledger.festgeld_payout(a)} for a in deposits]
     products, towers = offer_towers(s, user, 0)
     return render(request, "festgeld.html", user=user, rows=rows, products=products, towers=towers, error=error,
-                  days=ledger.get_account(s, user.id, "giro").payout_days)
+                  tok=issue_token(request, "festgeld"), days=ledger.get_account(s, user.id, "giro").payout_days)
 
 
 def offer_towers(s: Session, user: User, cents: int):
@@ -426,9 +442,11 @@ def festgeld_preview(request: Request, cents: int = 0, product_id: int = 0, user
 
 
 @app.post("/festgeld/oeffnen")
-def festgeld_open(request: Request, cents: int = Form(0), product_id: int = Form(0), user: User = Depends(kid),
-                  s: Session = Depends(get_session), today: date = Depends(get_today)):
+def festgeld_open(request: Request, cents: int = Form(0), product_id: int = Form(0), tok: str = Form(""),
+                  user: User = Depends(kid), s: Session = Depends(get_session), today: date = Depends(get_today)):
     need_module(user, "festgeld_enabled")
+    if not use_token(request, "festgeld", tok):  # a double tap: the first request already did it
+        return redirect("/festgeld")
     try:
         product = s.get(FestgeldProduct, product_id)
         if not product:

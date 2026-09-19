@@ -9,6 +9,7 @@
 <form method="post" action="/ueberweisen" class="grid grid-cols-2 gap-4">
   <input type="hidden" name="to_id" value="{{ dst.id }}">
   <input type="hidden" name="cents" value="{{ cents }}">
+  <input type="hidden" name="tok" value="{{ tok }}">
   <a href="/ueberweisen" class="btn btn-alt">↩️ {{ t('app.back') }}</a>
   <button class="btn">✅ {{ t('app.confirm.yes') }}</button>
 </form>

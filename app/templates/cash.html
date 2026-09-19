@@ -24,6 +24,7 @@
 </div>
 <form method="post" action="/bar/{{ kind }}" class="space-y-6">
   <input type="hidden" name="cents" value="{{ cents }}">
+  <input type="hidden" name="tok" value="{{ tok }}">
   <input type="hidden" name="pin" value="">
   <p class="text-center font-bold">{{ t('cash.pin') }}</p>
   <div class="flex justify-center gap-4 {{ 'shake' if error }}">

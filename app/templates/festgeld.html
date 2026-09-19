@@ -29,6 +29,7 @@
 <h2 class="text-2xl font-extrabold">{{ t('fg.open') }}</h2>
 <form method="post" action="/festgeld/oeffnen" class="space-y-6"
       hx-get="/festgeld/vorschau" hx-trigger="change" hx-target="#preview">
+  <input type="hidden" name="tok" value="{{ tok }}">
   {{ stepper() }}
   <section class="space-y-3">
     <h3 class="font-bold">{{ t('fg.term') }}</h3>
