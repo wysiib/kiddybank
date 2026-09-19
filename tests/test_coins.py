@@ -55,6 +55,7 @@ def test_slot_fill_is_whole_slots_plus_a_partly_filled_one():
 def test_shortfall_always_shows_a_missing_coin():
     s = coins.shortfall(1000, 9999)
     assert (s["unit"], s["have"], s["gap"]) == (1000, 1, 9)
-    close = coins.shortfall(149, 151)  # both round to the same count: still one dashed coin
+    close = coins.shortfall(150, 151)  # both round to 2 coins, gap is 0, floor ensures 1 dashed coin
+    assert close["have"] == 2
     assert close["gap"] == 1
     assert (s["have_cents"], s["need_cents"]) == (1000, 9999)
