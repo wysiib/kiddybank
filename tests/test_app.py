@@ -113,7 +113,8 @@ def test_parent_configures_rates_and_kid_opens_two_deposits(family):
     assert "3,5" in family.get("/eltern").text
 
     login(family, 2, "1111")
-    assert "3,5 %" in family.get("/home").text
+    home = family.get("/home").text
+    assert "Zinsen im Jahr" not in home and "bekommst du etwa" not in home  # empty balance: nothing to promise
     family.post("/festgeld/oeffnen", data={"cents": 300, "product_id": 1})
     family.post("/festgeld/oeffnen", data={"cents": 400, "product_id": 4})  # the new "Turbo" product
     page = family.get("/festgeld").text

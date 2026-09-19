@@ -218,8 +218,13 @@ def _events(s: Session, user: User) -> list[dict]:
         {"type": "goal", "goal": g} for g in ledger.unseen_reached_goals(s, user.id)]
 
 
-def _rate(acc: Account) -> dict:
-    return {"rate": format_percent(acc.interest_rate_bp, "%"), "cents": format_percent(acc.interest_rate_bp, "Cent")}
+def _interest_hint(acc: Account, today: date) -> str:
+    """Empty when the payout would round to 0 cents: nothing gets booked then, so don't promise it."""
+    days, cents = ledger.next_interest(acc, today)
+    if not cents:
+        return ""
+    when = t("home.interest.tomorrow") if days == 1 else t("home.interest.days", days=days)
+    return t("home.interest", when=when, amount=format_money(cents))
 
 
 @app.get("/home")
@@ -229,7 +234,7 @@ def home(request: Request, user: User = Depends(kid), s: Session = Depends(get_s
     deposits = [a for a in own_accounts(s, user, "festgeld") if not a.collected_at]
     cards = _goal_cards([g for g in ledger.list_goals(s, user.id) if not g.done_at], giro)
     return render(request, "home.html", user=user, giro=giro, deposits=deposits, top=max(cards, key=lambda c: c["pct"], default=None), week=week,
-                  events=_events(s, user), rate=_rate, festgeld_visible=user.festgeld_enabled or bool(deposits))
+                  events=_events(s, user), interest_hint=_interest_hint(giro, today), festgeld_visible=user.festgeld_enabled or bool(deposits))
 
 
 @app.post("/gesehen")

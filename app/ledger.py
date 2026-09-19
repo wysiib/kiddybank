@@ -124,6 +124,13 @@ def accrue_interest(s: Session, acc: Account, today: date) -> None:
             post(s, None, acc, cents, "zins", now=datetime.combine(today, time(0)))
 
 
+def next_interest(acc: Account, today: date) -> tuple[int, int]:
+    """(days until the next weekly payout, cents expected then if the balance stays as it is). Call after catch-up."""
+    days = max((acc.interest_paid_on + timedelta(days=INTEREST_PAYOUT_DAYS) - today).days, 1)
+    total = acc.interest_accrued + max(acc.balance_cents, 0) * acc.interest_rate_bp * days
+    return days, total // INTEREST_DENOM
+
+
 def _next_run(d: date, interval: str) -> date:
     if interval == "weekly":
         return d + timedelta(days=7)

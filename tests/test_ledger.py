@@ -74,6 +74,16 @@ def test_interest_is_weekly_exact_and_idempotent(s, kids):
     assert s.exec(select(Transaction).where(Transaction.type == "zins")).all().__len__() == 1
 
 
+def test_next_interest_predicts_the_weekly_payout(s, kids):
+    sp = giro(s, kids[0])
+    sp.balance_cents = 10_000  # 100 EUR at 10 %/year = 19.17 cents/week
+    ledger.ensure_up_to_date(s, sp, D0 + timedelta(days=3))
+    days, cents = ledger.next_interest(sp, D0 + timedelta(days=3))
+    assert (days, cents) == (4, 19)  # a week's interest, booked on day 7
+    ledger.ensure_up_to_date(s, sp, D0 + timedelta(days=7))
+    assert sp.balance_cents == 10_000 + cents
+
+
 def test_interest_remainder_is_carried_not_lost(s, kids):
     sp = giro(s, kids[0])
     sp.balance_cents = 10_000
