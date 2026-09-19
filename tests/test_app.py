@@ -81,15 +81,26 @@ def test_transfer_confirm_and_insufficient(family):
 
     r = family.post("/ueberweisen/pruefen", data={**form, "cents": 9999})
     assert r.status_code == 400 and "nicht genug Geld" in r.text
+    assert "Du hast 10,00 €" in r.text and "Du brauchst 99,99 €" in r.text and r.text.count("coin-ghost") == 9
 
     r = family.post("/ueberweisen/pruefen", data={**form, "cents": 300})
-    assert "Vorher 10,00 €" in r.text and "Nachher 7,00 €" in r.text
+    assert "Bleibt bei dir" in r.text and "7,00 €" in r.text and "Kommt bei Mama an" in r.text
+    assert r.text.count("coin-ghost") == 3  # the 3 EUR arrive as dashed coins at the receiver
     assert "Geschafft" in confirm(family, "/ueberweisen", cents=300, **form).text
     with Session(web._engine()) as s:
         assert ledger.get_account(s, 1, "giro").balance_cents == 300
 
     own = {"to_id": account_id(2, "giro"), "cents": 100}
     assert family.post("/ueberweisen", data=own).status_code == 403  # can't "transfer" to yourself
+
+
+def test_transfer_confirm_does_not_leak_the_receivers_balance(family):
+    with Session(web._engine()) as s:
+        ledger.get_account(s, 1, "giro").balance_cents = 4242
+        s.commit()
+    login(family, 2, "1111")
+    r = family.post("/ueberweisen/pruefen", data={"to_id": account_id(1, "giro"), "cents": 300})
+    assert "42,42" not in r.text
 
 
 def test_festgeld_flow_and_module_switch(family):
@@ -109,6 +120,43 @@ def test_festgeld_flow_and_module_switch(family):
     login(family, 2, "1111")
     assert family.post("/festgeld/oeffnen", data={"cents": 100, "product_id": 1}).status_code == 403
     assert "/festgeld" not in family.get("/home").text  # tile is gone
+
+
+def test_festgeld_locked_and_ready_show_stacks(family):
+    login(family, 2, "1111")
+    open_deposit(family, 1000, 1)  # 10 EUR, Kurz: 7 days, 15 Cent interest
+    mine = lambda: family.get("/festgeld").text.split("Neue Schatztruhe")[0]  # noqa: E731  the deposit card, not the offers
+    locked = mine()
+    assert locked.count('<i class="coin"></i>') == 10 and locked.count("coin-ghost") == 3  # 10 EUR now, 3 x 5 Cent still to come
+    assert 'class="pips"' in locked and "Große Münze = 1,00 €" in locked and "Kleine Münze = 5 Cent" in locked
+    assert "Noch 7 Tage" in locked and "1 Punkt = 1 Tag" in locked and "1 Kalender" not in locked  # dots, not calendars
+
+    family.clock["today"] = D0 + timedelta(days=7)
+    ready = mine()
+    assert ready.count('<i class="coin"></i>') == 13 and "coin-ghost" not in ready  # the interest is solid gold now
+    assert "Fertig!" in ready and "Abholen" in ready
+
+
+def test_festgeld_deposits_share_one_coin_unit(family):
+    login(family, 1, "1234")
+    family.post("/eltern/buchen", data={"account_id": account_id(2, "giro"), "amount": "40,00"})  # Mia: 50 EUR
+    login(family, 2, "1111")
+    open_deposit(family, 500, 1)
+    open_deposit(family, 4500, 1)
+    cards = family.get("/festgeld").text.split("Neue Schatztruhe")[0].split('class="card space-y-3 text-center"')[1:]
+    assert len(cards) == 2
+    assert [c.count('<i class="coin"></i>') for c in cards] == [1, 9]  # 5 and 45 EUR on one unit of 5 EUR: 10x money is not 2x coins
+    assert all("Große Münze = 5,00 €" in c for c in cards)
+
+
+def test_festgeld_offers_show_term_as_calendars_and_interest_as_coins(family):
+    login(family, 2, "1111")
+    page = family.get("/festgeld").text.split("Neue Schatztruhe")[1]
+    assert page.count('class="cals"') == 3  # Kurz 7, Mittel 14, Lang 30 days
+    assert "1 Kalender = 1 Woche" in page  # 30 days is more than 13 days, so the scene counts weeks
+    assert "Kleine Münze = 10 Cent" in page  # unit printed once: Lang pays about 1,29 € on the 10 EUR demo, 13 coins of 10 Cent stay under the cap of 20
+    assert page.count("cal-part") == 1  # Lang: 4 weeks and 2 days ends in a smaller calendar; 7 and 14 days are whole weeks
+    assert "stack-gold" in page and "stack-small" in page
 
 
 def test_interest_celebration_shows_until_seen(family):
@@ -143,10 +191,13 @@ def test_parent_configures_rates_and_kid_opens_two_deposits(family):
     turbo = product_id("Turbo")
     open_deposit(family, 400, turbo)  # the new "Turbo" product
     page = family.get("/festgeld").text
-    assert "15 Cent" in page  # bars start from the 10 EUR demo amount: Kurz (1,5 % per week) pays 15 Cent, this kid's Giro 0
+    assert "15 Cent" in page  # offers start from the 10 EUR demo amount: Kurz (1,5 % per week) pays 15 Cent, this kid's Giro 0
     bars = family.get("/festgeld/vorschau", params={"cents": 10_000, "product_id": 1}).text  # 100 EUR
-    assert 'id="towers-1"' in bars and "1,50 €" in bars and "4 Cent" in bars  # Kurz 1,5 % for a week vs 0,04 % Giro
-    assert f'id="towers-{turbo}"' in bars and "41 Cent" in bars  # Turbo 50 %/year for 3 days, and every tile is refreshed
+    assert 'id="offer-1"' in bars and "1,50 €" in bars and "4 Cent" in bars  # Kurz 1,5 % for a week vs 0,04 % Giro
+    assert f'id="offer-{turbo}"' in bars and "41 Cent" in bars  # Turbo 50 %/year for 3 days, and every tile is refreshed
+    assert 'id="offer-unit"' in bars  # the unit note is refreshed too, the scale can change with the amount
+    unit = lambda html: re.search(r'<p id="offer-unit"[^>]*>(.*?)</p>', html).group(1)  # noqa: E731
+    assert "Kleine Münze = 10 Cent" in unit(page) and "Kleine Münze = 1,00 €" in unit(bars)  # demo 10 EUR vs 100 EUR: the scale moved
     assert "Kurz" in page and "Turbo" in page and page.count("Noch 7 Tage") == 1 and "Noch 3 Tage" in page
 
     def offers():  # what the kid can pick from, i.e. the part of the page after the "new deposit" heading
@@ -324,9 +375,13 @@ def test_home_week_card(family):
     assert "Deine Woche" in home and "Von anderen" in home and "+10,00 €" in home and "Ausgegeben" not in home
     confirm(family, "/ueberweisen", to_id=account_id(1, "giro"), cents=300)
     assert "-3,00 €" in family.get("/home").text
+    card = family.get("/home").text
+    assert card.count("stack-row") == 2 and "Große Münze = 1,00 €" in card  # 10 EUR from others, 3 EUR spent: coins in a row each
     family.clock["today"] = D0 + timedelta(days=400)  # the manual bookings are old news, only interest is left
     later = family.get("/home").text
     assert "Zinsen" in later and "Von anderen" not in later and "Ausgegeben" not in later
+    assert "stack-small" in later  # the interest row uses small coins
+    assert "Große Münze" not in later and "Kleine Münze" in later and later.count("stack-row") == 1  # no euro row, no big-coin note
     with Session(web._engine()) as s:
         for tx in s.exec(select(Transaction)).all():
             s.delete(tx)
@@ -352,7 +407,13 @@ def test_cash_in_and_out_need_parent_pin(family):
     login(family, 2, "1111")
 
     r = family.post("/bar/abheben/pruefen", data={"cents": 300})
-    assert "Vorher 10,00 €" in r.text and "Nachher 7,00 €" in r.text
+    assert "Bleibt auf dem Konto" in r.text and "Geht raus" in r.text and "7,00 €" in r.text
+    assert r.text.count('<i class="coin"></i>') == 10 and r.text.count("coin-ghost") == 1  # 7 stay, 3 leave, 1 interest coin lost
+    assert "Große Münze = 1,00 €" in r.text
+    half = family.post("/bar/abheben/pruefen", data={"cents": 250}).text  # half a coin: still 10 coins for 10,00 €
+    assert half.count('<i class="coin"></i>') == 10
+    stay, go = half.split("Bleibt auf dem Konto")[0], half.split("Geht raus")[0]
+    assert stay.count('<i class="coin"></i>') == 7 and go.count('<i class="coin"></i>') == 10  # 7 stay, then 3 more go
     assert "verpasst du" in r.text and "Zinsen" in r.text  # withdrawing costs interest, says by how much
 
     assert "nicht der Code" in confirm(family, "/bar/abheben", cents=300, pin="1111").text  # kid's own PIN
@@ -360,11 +421,13 @@ def test_cash_in_and_out_need_parent_pin(family):
     assert "Abgehoben" in confirm(family, "/bar/abheben", cents=300, pin="1234").text
     assert giro_cents(2) == 700
 
-    assert "Nachher 12,00 €" in family.post("/bar/einzahlen/pruefen", data={"cents": 500}).text
+    r = family.post("/bar/einzahlen/pruefen", data={"cents": 500})
+    assert "Danach hast du 12,00 €" in r.text and r.text.count("coin-ghost") == 3 and "Große Münze = 2,00 €" in r.text
     assert "Eingezahlt" in confirm(family, "/bar/einzahlen", cents=500, pin="1234").text
     assert giro_cents(2) == 1200
 
-    assert family.post("/bar/abheben/pruefen", data={"cents": 99999}).status_code == 400
+    r = family.post("/bar/abheben/pruefen", data={"cents": 99999})
+    assert r.status_code == 400 and "Du brauchst 999,99 €" in r.text and "coin-ghost" in r.text
     tok = token(family.post("/bar/abheben/pruefen", data={"cents": 300}))
     assert family.post("/bar/abheben", data={"cents": 99999, "pin": "1234", "tok": tok}).status_code == 400  # balance changed since the check
     assert family.post("/bar/einzahlen", data={"cents": -500, "pin": "1234"}).status_code == 400  # must not flip into a withdrawal
@@ -467,6 +530,7 @@ def test_festgeld_errors_render_in_place_and_never_echo_the_url(family):
     assert "Schick Geld an Evil" not in r.text  # the query string is not a message channel any more
     r = family.post("/festgeld/oeffnen", data={"cents": 99_999, "product_id": 1, "tok": token(family.get("/festgeld"))})
     assert r.status_code == 400 and "nicht genug Geld" in r.text
+    assert "Du brauchst 999,99 €" in r.text and "coin-ghost" in r.text
 
 
 def test_dauerauftrag_needs_a_real_kid(family):
@@ -568,3 +632,32 @@ def test_parent_pin_reset_rejects_bad_input_and_non_kids(family):
     assert family.post("/eltern/kinder/1/pin", data={"pin": "5555"}).status_code == 404  # a parent is not a kid
     assert login(family, 2, "1111").headers["location"] == "/"
     assert family.post("/eltern/kinder/2/pin", data={"pin": "5555"}).status_code == 403  # kids can't reset
+
+
+def test_home_counts_down_to_the_interest_payout(family):
+    login(family, 2, "1111")  # 10 EUR at 1 % per week, paid every 7 days: 10 Cent
+    home = family.get("/home").text
+    assert home.count('class="pip"') == 6 and home.count("pip-now") == 1 and "pip-on" not in home
+    assert "1 Punkt = 1 Tag" in home and "1 Kalender" not in home  # 7 days: one dot a day
+    assert "10 Cent" in home
+    family.clock["today"] = D0 + timedelta(days=3)
+    home = family.get("/home").text
+    assert home.count("pip-on") == 3  # three of seven days are over
+
+
+def test_home_dots_count_weeks_for_a_monthly_payout(family):
+    login(family, 1, "1234")
+    family.post("/eltern/kinder/2", data={"rate": "1", "period": 30, "festgeld": "on"})  # 1 % per 30 days on 10 EUR: 10 Cent
+    login(family, 2, "1111")
+    home = family.get("/home").text
+    assert home.count('class="pip"') + home.count("pip-now") == 5  # ceil(30 / 7) weeks
+    assert "1 Punkt = 1 Woche" in home and "10 Cent" in home
+
+
+def test_goal_progress_is_ten_slots(family):
+    login(family, 2, "1111")  # 10 EUR in the Giro
+    add_goal(family, name="Fahrrad", cents=3000)  # 33 % of 30 EUR
+    page = family.get("/ziele").text
+    assert page.count('class="slot slot-on"') == 3 and page.count("slot-part") == 1 and "--fill: 30%" in page
+    assert "Ein Platz = 3,00 €" in page
+    assert "slot-on" in family.get("/home").text

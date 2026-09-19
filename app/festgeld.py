@@ -4,7 +4,7 @@ from datetime import date, timedelta
 
 from sqlmodel import Session, select
 
-from . import ledger
+from . import coins, ledger
 from .models import Account, FestgeldProduct
 
 DEFAULT_PRODUCTS = (("Kurz", 7, ledger.annual_bp(150, 7)), ("Mittel", 14, ledger.annual_bp(200, 7)),
@@ -61,18 +61,22 @@ def festgeld_payout(fg: Account) -> tuple[int, int]:
     return payout(fg.balance_cents, fg.interest_rate_bp, (fg.maturity_date - fg.opened_at).days)
 
 
-TOWER_DEMO_CENTS = 1000  # amount the offer bars show until the kid has dialled one in
+STACK_DEMO_CENTS = 1000  # amount the offer stacks show until the kid has dialled one in
 
 
-def offer_towers(s: Session, giro: Account, cents: int):
-    """The offers plus, per offer, the bonus this Giro vs. that offer would pay on `cents` and the bar heights (0-100, one shared scale)."""
+def offer_stacks(s: Session, giro: Account, cents: int):
+    """The offers plus what to draw for each: this Giro's and the offer's interest on `cents` as coins, and the
+    term as calendars. Interest coins share one unit and terms share one calendar unit, so the offers compare."""
     products = s.exec(select(FestgeldProduct).order_by(FestgeldProduct.term_days)).all()
-    cents = cents if cents > 0 else TOWER_DEMO_CENTS
+    cents = cents if cents > 0 else STACK_DEMO_CENTS
     bonus = {p.id: (ledger.interest_cents(cents, giro.interest_rate_bp, p.term_days), ledger.interest_cents(cents, p.rate_bp, p.term_days))
              for p in products}
-    top = max((b for pair in bonus.values() for b in pair), default=0)
-    height = lambda b: max(8, b * 100 // top) if b else 0  # noqa: E731  a tiny bonus still gets a visible stub
-    return products, {pid: {"giro": g, "fg": f, "giro_h": height(g), "fg_h": height(f)} for pid, (g, f) in bonus.items()}
+    unit = coins.coin_unit([b for pair in bonus.values() for b in pair], coins.SMALL_LADDER, coins.SMALL_CAP)
+    cal = coins.time_unit(max((p.term_days for p in products), default=1))
+    by_id = {p.id: {"giro": g, "fg": f, "giro_coins": coins.coins(g, unit), "fg_coins": coins.coins(f, unit),
+                    "cals": coins.time_units(p.term_days, cal)}
+             for p in products for g, f in [bonus[p.id]]}
+    return products, {"unit": unit, "cal": cal, "by_id": by_id}
 
 
 def collect_festgeld(s: Session, fg: Account, today: date) -> tuple[int, int]:

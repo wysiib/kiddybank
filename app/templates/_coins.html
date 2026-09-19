@@ -1,0 +1,38 @@
+{# Countable pictures (spec: docs/superpowers/specs/2026-09-19-coin-visuals-design.md). Pure HTML/CSS, no JS.
+   Counts and units come from app/coins.py via the routes; nothing here decides how much to draw. #}
+
+{# n solid coins, then `ghost` dashed ones on top (not yours yet / given up). kind: big (1 unit of own money) or small (interest). #}
+{% macro stack(kind, n, ghost=0, tone='gray', row=False, label='') %}
+<div class="stack stack-{{ kind }}{{ ' stack-gold' if tone == 'gold' }}{{ ' stack-row' if row }}"{% if label %} role="img" aria-label="{{ label }}"{% else %} aria-hidden="true"{% endif %}>
+  {%- for _ in range(n) %}<i class="coin"></i>{% endfor -%}
+  {%- for _ in range(ghost) %}<i class="coin coin-ghost"></i>{% endfor -%}
+</div>
+{% endmacro %}
+
+{# One calendar per unit of waiting; a fractional `units` ends in a smaller calendar (never below about half size). #}
+{% macro calendars(units, label='') %}
+{% set full = units|int %}{% set rest = units - full %}
+<div class="cals"{% if label %} role="img" aria-label="{{ label }}"{% else %} aria-hidden="true"{% endif %}>
+  {%- for _ in range(full) %}<i class="cal"></i>{% endfor -%}
+  {%- if rest > 0.02 %}<i class="cal cal-part" style="--k: {{ ([rest, 0.45]|max)|round(2) }}"></i>{% endif -%}
+</div>
+{% endmacro %}
+
+{# `total` dots, the first `on` filled, the next one highlighted (today). #}
+{% macro pips(total, on, label='') %}
+<div class="pips"{% if label %} role="img" aria-label="{{ label }}"{% else %} aria-hidden="true"{% endif %}>
+  {%- for i in range(total) %}<i class="pip{{ ' pip-on' if i < on }}{{ ' pip-now' if i == on }}"></i>{% endfor -%}
+</div>
+{% endmacro %}
+
+{# Ten slots, each a tenth of a goal's price; the next one is filled partly. #}
+{% macro slots(pct, label='') %}
+{% set fill = slot_fill(pct) %}
+<div class="slots"{% if label %} role="img" aria-label="{{ label }}"{% else %} aria-hidden="true"{% endif %}>
+  {%- for i in range(10) %}
+  {%- if i < fill[0] %}<i class="slot slot-on"></i>
+  {%- elif i == fill[0] and fill[1] %}<i class="slot slot-part" style="--fill: {{ fill[1] }}%"></i>
+  {%- else %}<i class="slot"></i>{% endif %}
+  {%- endfor -%}
+</div>
+{% endmacro %}

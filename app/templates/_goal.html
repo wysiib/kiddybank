@@ -1,9 +1,11 @@
-{# Goal picture (photo fades from gray to color as the bar fills, else the emoji) and progress bar. #}
+{% from "_coins.html" import slots %}
+{# Goal picture (photo fades from gray to color as the slots fill, else the emoji) and progress slots. #}
 {% macro visual(g, pct, cls="h-24 w-24") %}
 {% if g.has_photo %}<img src="/ziele/{{ g.id }}/bild" alt="{{ g.name }}" class="{{ cls }} mx-auto rounded-2xl object-cover" style="filter: grayscale({{ 100 - pct }}%)">
 {% else %}<span class="text-6xl">{{ g.emoji }}</span>{% endif %}
 {% endmacro %}
 
-{% macro bar(pct) %}
-<div class="h-5 w-full overflow-hidden rounded-full bg-slate-200"><div class="h-full rounded-full bg-pink-500" style="width: {{ pct }}%"></div></div>
+{% macro progress(pct, target_cents) %}
+{{ slots(pct, t('goal.pct', pct=pct)) }}
+<p class="text-center text-sm text-slate-500">{{ t('goal.slot', amount=((target_cents + 5) // 10)|money) }}</p>
 {% endmacro %}

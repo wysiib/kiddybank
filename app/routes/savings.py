@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from fastapi.responses import Response
 from sqlmodel import Session
 
-from .. import festgeld, goals, ledger
+from .. import coins, festgeld, goals, ledger
 from ..i18n import format_money, t
 from ..ledger import LedgerError
 from ..models import Account, FestgeldProduct, Goal, User
@@ -30,14 +30,27 @@ GOAL_EMOJIS = ["🎯", "🧸", "🚲", "⚽", "🎮", "📚", "🎁", "✈️", 
 
 # --- kid: festgeld -----------------------------------------------------------------------------
 
-def _festgeld_page(request: Request, s: Session, user: User, today: date, error: str | None = None):
+def _deposit_row(a: Account, today: date, big: int, small: int) -> dict:
+    """One open deposit with what its card draws: deposit and interest as coins, elapsed time as dots."""
+    total, left = (a.maturity_date - a.opened_at).days, (a.maturity_date - today).days
+    payout = festgeld.festgeld_payout(a)
+    unit = coins.time_unit(total)
+    return {"acc": a, "status": festgeld.festgeld_status(a, today), "days": left, "payout": payout,
+            "big": big, "small": small, "deposit_coins": coins.coins(a.balance_cents, big),
+            "interest_coins": coins.coins(payout[1], small), "unit": unit,
+            "pips": (-(-total // unit), max(0, total - left) // unit)}
+
+
+def _festgeld_page(request: Request, s: Session, user: User, today: date, error: str | None = None,
+                   gap: dict | None = None):
     deposits = active_deposits(s, user)
     if not user.festgeld_enabled and not deposits:
         raise HTTPException(403, "err.module_off")
-    rows = [{"acc": a, "status": festgeld.festgeld_status(a, today), "days": (a.maturity_date - today).days,
-             "payout": festgeld.festgeld_payout(a)} for a in deposits]
-    products, towers = festgeld.offer_towers(s, ledger.get_account(s, user.id, "giro"), 0)
-    return render(request, "festgeld.html", user=user, rows=rows, products=products, towers=towers, error=error,
+    big = coins.coin_unit([a.balance_cents for a in deposits])  # one unit for every card, so equal coins are equal money
+    small = coins.coin_unit([festgeld.festgeld_payout(a)[1] for a in deposits], coins.SMALL_LADDER, coins.SMALL_CAP)
+    rows = [_deposit_row(a, today, big, small) for a in deposits]
+    products, view = festgeld.offer_stacks(s, ledger.get_account(s, user.id, "giro"), 0)
+    return render(request, "festgeld.html", user=user, rows=rows, products=products, view=view, error=error, gap=gap,
                   tok=issue_token(request, "festgeld"), days=ledger.get_account(s, user.id, "giro").payout_days)
 
 
@@ -51,8 +64,8 @@ def festgeld_page(request: Request, user: User = Depends(kid), s: Session = db,
 def festgeld_preview(request: Request, cents: int = 0, product_id: int = 0, user: User = Depends(kid),
                      s: Session = db):
     product = s.get(FestgeldProduct, product_id)
-    products, towers = festgeld.offer_towers(s, ledger.get_account(s, user.id, "giro"), cents)
-    ctx = dict(oob=True, products=products, towers=towers)  # also refreshes the bars in every offer tile
+    products, view = festgeld.offer_stacks(s, ledger.get_account(s, user.id, "giro"), cents)
+    ctx = dict(oob=True, products=products, view=view)  # also refreshes the picture in every offer tile
     if cents <= 0 or not product:
         return render(request, "_preview.html", total=None, **ctx)
     return render(request, "_preview.html", total=festgeld.payout(cents, product.rate_bp, product.term_days)[0], **ctx)
@@ -70,7 +83,9 @@ def festgeld_open(request: Request, cents: int = Form(0), product_id: int = Form
             raise LedgerError("err.term")
         festgeld.open_festgeld(s, ledger.get_account(s, user.id, "giro"), cents, product, today)
     except LedgerError as e:
-        return _festgeld_page(request, s, user, today, e.args[0])
+        return _festgeld_page(request, s, user, today, e.args[0], gap=(
+            coins.shortfall(ledger.get_account(s, user.id, "giro").balance_cents, cents)
+            if e.args[0] == "err.insufficient" else None))
     return redirect("/festgeld")
 
 

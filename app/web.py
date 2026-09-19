@@ -13,7 +13,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlmodel import Session, select
 
-from . import ledger
+from . import coins, ledger
 from .i18n import LOCALE, format_date, format_money, format_percent, format_plain, t
 from .ledger import LedgerError
 from .models import Account, User, make_engine
@@ -36,6 +36,8 @@ templates.env.filters["plain"] = format_plain
 templates.env.filters["date"] = format_date
 templates.env.filters["pct"] = format_percent
 templates.env.filters["per"] = lambda bp, days: format_percent(ledger.period_bp(bp, days))  # annual bp -> "per week/month/year"
+templates.env.globals["slot_fill"] = coins.slot_fill
+templates.env.filters["compact"] = lambda cents: t("fg.cent", n=cents) if cents < 100 else format_money(cents)  # 5 -> "5 Cent", 150 -> "1,50 €"
 
 
 @lru_cache

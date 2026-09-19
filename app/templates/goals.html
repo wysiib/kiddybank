@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_stepper.html" import stepper %}
-{% from "_goal.html" import visual, bar %}
+{% from "_goal.html" import visual, progress %}
 {% block content %}
 <h1 class="text-3xl font-extrabold">🎯 {{ t('goal.title') }}</h1>
 <p class="lesson">{{ t('goal.lesson') }}</p>
@@ -10,7 +10,7 @@
 <div class="card space-y-3 text-center">
   {{ visual(c.goal, c.pct, 'h-48 w-48') }}
   {% if c.goal.name %}<p class="text-2xl font-extrabold">{{ c.goal.name }}</p>{% endif %}
-  {{ bar(c.pct) }}
+  {{ progress(c.pct, c.goal.target_cents) }}
   <p class="text-lg text-slate-500">{{ giro.balance_cents|money }} / {{ c.goal.target_cents|money }}</p>
   {% if c.reached %}
   <p class="text-2xl font-extrabold">{{ t('goal.reached') }}</p>

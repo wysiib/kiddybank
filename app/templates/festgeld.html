@@ -1,13 +1,24 @@
 {% extends "base.html" %}
 {% from "_stepper.html" import stepper %}
+{% from "_coins.html" import stack, pips %}
 {% block content %}
 <h1 class="text-3xl font-extrabold">🧰 {{ t('fg.title') }} <span class="text-base font-normal text-slate-500">{{ t('acct.festgeld.sub') }}</span></h1>
 <p class="lesson">{{ t('fg.lesson') }}</p>
 {% if error %}<p class="error">{{ t(error) }}</p>{% endif %}
+{% if gap %}{% include "_short.html" %}{% endif %}
 
 {% for r in rows %}
 <div class="card space-y-3 text-center">
   <p class="text-base text-slate-500">{{ r.acc.name }} · {{ r.acc.interest_rate_bp|per(days) }} % {{ t('per.' ~ days) }}</p>
+  <div class="flex items-end justify-center gap-4">
+    <div class="col">{{ stack('big', r.deposit_coins) }}<b>{{ r.acc.balance_cents|money }}</b>{{ t('fg.yours') }}</div>
+    <div class="col">
+      {% if r.status == 'ready' %}{{ stack('small', r.interest_coins, tone='gold') }}
+      {% else %}{{ stack('small', 0, ghost=r.interest_coins, tone='gold') }}{% endif %}
+      <b>+{{ r.payout[1]|compact }}</b>{{ t('fg.extra' if r.status == 'ready' else 'fg.comes') }}
+    </div>
+  </div>
+  <p class="text-sm text-slate-500">{{ t('coin.unit', amount=r.big|compact) }} · {{ t('coin.unit.small', amount=r.small|compact) }}</p>
   {% if r.status == 'ready' %}
   <div class="pop text-7xl">🎁</div>
   <p class="text-2xl font-extrabold">{{ t('fg.ready') }}</p>
@@ -15,8 +26,9 @@
   <p class="lesson">{{ t('fg.ready.lesson', interest=r.payout[1]|money) }}</p>
   <form method="post" action="/festgeld/{{ r.acc.id }}/abholen"><button class="btn w-full">🎉 {{ t('fg.collect') }}</button></form>
   {% else %}
-  <div class="text-7xl">🔒</div>
-  <p class="text-5xl font-extrabold">{{ r.acc.balance_cents|money }}</p>
+  <div class="text-5xl">🔒</div>
+  {{ pips(r.pips[0], r.pips[1]) }}
+  <p class="text-sm text-slate-500">{{ t('dot.unit.' ~ r.unit) }}</p>
   <p class="text-2xl font-bold">⏳ {{ t('fg.locked.1') if r.days == 1 else t('fg.locked', n=r.days) }}</p>
   <p class="lesson">{{ t('fg.locked.lesson') }} {{ t('fg.preview', total=r.payout[0]|money) }}</p>
   {% endif %}
@@ -37,14 +49,14 @@
       {% for p in products %}
       <label class="tile choice">
         <input type="radio" name="product_id" value="{{ p.id }}" class="sr-only" required>
-        <span class="text-4xl">🗓️</span>{{ p.name }}
-        <span class="text-base font-normal">{{ t('fg.days.1') if p.term_days == 1 else t('fg.days', n=p.term_days) }}</span>
-        <div id="towers-{{ p.id }}">{% include "_towers.html" %}</div>
+        {{ p.name }}
+        <div id="offer-{{ p.id }}" class="flex flex-col items-center gap-2">{% include "_offer.html" %}</div>
       </label>
       {% else %}
       <p class="lesson col-span-3">{{ t('fg.no_products') }}</p>
       {% endfor %}
     </div>
+    {% if products %}{% include "_offer_unit.html" %}{% endif %}
   </section>
   <div id="preview">{% with total = None %}{% include "_preview.html" %}{% endwith %}</div>
   <button class="btn w-full">🔒 {{ t('fg.start') }}</button>

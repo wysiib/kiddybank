@@ -5,7 +5,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from sqlmodel import Session, select
 
-from .. import auth, events, goals, ledger
+from .. import auth, coins, events, goals, ledger
 from ..auth import verify_pin
 from ..i18n import format_money, t
 from ..ledger import LedgerError
@@ -35,23 +35,33 @@ def _events(s: Session, user: User) -> list[dict]:
         {"type": "goal", "goal": g} for g in goals.unseen_reached_goals(s, user.id)]
 
 
-def _interest_hint(acc: Account, today: date) -> str:
-    """Empty when the payout would round to 0 cents: nothing gets booked then, so don't promise it."""
+def _interest_hint(acc: Account, today: date) -> tuple[str, dict | None]:
+    """(sentence, dots picture). Both empty when the payout would round to 0 cents: nothing gets booked then, so don't promise it."""
     days, cents = ledger.next_interest(acc, today)
     if not cents:
-        return ""
+        return "", None
     when = t("home.interest.tomorrow") if days == 1 else t("home.interest.days", days=days)
-    return t("home.interest", when=when, amount=format_money(cents))
+    unit = coins.time_unit(acc.payout_days)
+    total = -(-acc.payout_days // unit)
+    return t("home.interest", when=when, amount=format_money(cents)), \
+        {"total": total, "on": max(0, total - -(-days // unit)), "cents": cents, "unit": unit}
 
 
 @router.get("/home")
 def home(request: Request, user: User = Depends(kid), s: Session = db, today: date = Depends(get_today)):
     giro = ledger.get_account(s, user.id, "giro")
     week = {k: v for k, v in ledger.week_summary(s, giro, today).items() if v}
+    euros = [v for k, v in week.items() if k != "zins"]
+    big = coins.coin_unit(euros)
+    small = coins.coin_unit([week.get("zins", 0)], coins.SMALL_LADDER, coins.SMALL_CAP)
+    week_pic = {"big": big if euros else 0, "small": small,
+                "coins": {k: coins.coins(v, small if k == "zins" else big) for k, v in week.items()}}
     deposits = active_deposits(s, user)
     cards = goals.cards([g for g in goals.list_goals(s, user.id) if not g.done_at], giro)
+    hint, payout = _interest_hint(giro, today)
     return render(request, "home.html", user=user, giro=giro, deposits=deposits, top=max(cards, key=lambda c: c["pct"], default=None), week=week,
-                  events=_events(s, user), interest_hint=_interest_hint(giro, today), festgeld_visible=user.festgeld_enabled or bool(deposits))
+                  week_pic=week_pic,
+                  events=_events(s, user), interest_hint=hint, payout=payout, festgeld_visible=user.festgeld_enabled or bool(deposits))
 
 
 @router.post("/gesehen")
@@ -92,10 +102,10 @@ def statement(request: Request, account_id: int, user: User = Depends(kid), s: S
 
 # --- kid: transfer -----------------------------------------------------------------------------
 
-def _transfer_form(request: Request, s: Session, user: User, error: str | None = None):
+def _transfer_form(request: Request, s: Session, user: User, error: str | None = None, gap: dict | None = None):
     targets = [{"id": ledger.get_account(s, u.id, "giro").id, "avatar": u.avatar, "label": u.name}
                for u in s.exec(select(User).where(User.id != user.id).order_by(User.role.desc(), User.id)).all()]  # type: ignore[attr-defined]
-    return render(request, "transfer.html", user=user, targets=targets, error=error,
+    return render(request, "transfer.html", user=user, targets=targets, error=error, gap=gap,
                   giro=ledger.get_account(s, user.id, "giro"))
 
 
@@ -122,8 +132,12 @@ def transfer_check(request: Request, to_id: int = Form(...), cents: int = Form(0
         if cents > src.balance_cents:
             raise LedgerError("err.insufficient")
     except LedgerError as e:
-        return _transfer_form(request, s, user, e.args[0])
-    return render(request, "transfer_confirm.html", user=user, src=src, dst=dst, cents=cents,
+        return _transfer_form(request, s, user, e.args[0], gap=(
+            coins.shortfall(src.balance_cents, cents) if e.args[0] == "err.insufficient" else None))
+    unit = coins.coin_unit([src.balance_cents])  # only the sender's own balance sets the scale, never the receiver's
+    mine, go = coins.split(src.balance_cents, cents, unit)  # what stays + what leaves add up to the sender's stack
+    pic = {"unit": unit, "mine": mine, "go": go}
+    return render(request, "transfer_confirm.html", user=user, src=src, dst=dst, cents=cents, pic=pic,
                   to_name=s.get(User, dst.user_id).name, tok=issue_token(request, "transfer"))
 
 
@@ -136,7 +150,8 @@ def transfer_do(request: Request, to_id: int = Form(...), cents: int = Form(...)
     try:
         ledger.transfer(s, src, dst, cents, today)
     except LedgerError as e:
-        return _transfer_form(request, s, user, e.args[0])
+        return _transfer_form(request, s, user, e.args[0], gap=(
+            coins.shortfall(src.balance_cents, cents) if e.args[0] == "err.insufficient" else None))
     return render(request, "done.html", user=user, emoji="💸", msg=t("xfer.done"), lesson=t("xfer.lesson"))
 
 
@@ -145,13 +160,28 @@ def transfer_do(request: Request, to_id: int = Form(...), cents: int = Form(...)
 CASH = ("einzahlen", "abheben")
 
 
-def _cash_page(request: Request, s: Session, user: User, kind: str, cents: int | None = None, error: str | None = None):
+def _cash_page(request: Request, s: Session, user: User, kind: str, cents: int | None = None, error: str | None = None,
+               gap: dict | None = None):
     if kind not in CASH:
         raise HTTPException(404)
     giro = ledger.get_account(s, user.id, "giro")
     lost = ledger.interest_cents(cents or 0, giro.interest_rate_bp, giro.payout_days) if kind == "abheben" else 0
-    return render(request, "cash.html", user=user, giro=giro, kind=kind, cents=cents,
-                  lost=lost, error=error, tok=issue_token(request, "cash") if cents else None)
+    pic = None
+    if cents:  # the confirm step draws what stays, what moves and what interest is given up
+        pic = {}
+        if kind == "abheben":
+            pic["small"] = coins.coin_unit([lost], coins.SMALL_LADDER, coins.SMALL_CAP)
+            pic["lost_coins"] = coins.coins(lost, pic["small"])
+            shown = min(cents, giro.balance_cents)  # the balance may have changed since the check
+            pic["unit"] = coins.coin_unit([giro.balance_cents])
+            pic["after"] = giro.balance_cents - shown
+            pic["stay"], pic["go"] = coins.split(giro.balance_cents, shown, pic["unit"])
+        else:
+            pic["after"] = giro.balance_cents + cents
+            pic["unit"] = coins.coin_unit([pic["after"]])
+            pic["have"], pic["come"] = coins.split(pic["after"], cents, pic["unit"])
+    return render(request, "cash.html", user=user, giro=giro, kind=kind, cents=cents, pic=pic,
+                  lost=lost, error=error, gap=gap, tok=issue_token(request, "cash") if cents else None)
 
 
 @router.get("/bar/{kind}")
@@ -166,7 +196,8 @@ def cash_check(request: Request, kind: str, cents: int = Form(0), user: User = D
     if cents <= 0:
         return _cash_page(request, s, user, kind, error="err.amount")
     if kind == "abheben" and cents > giro.balance_cents:
-        return _cash_page(request, s, user, kind, error="err.insufficient")
+        return _cash_page(request, s, user, kind, error="err.insufficient",
+                          gap=coins.shortfall(giro.balance_cents, cents))
     return _cash_page(request, s, user, kind, cents)
 
 

@@ -5,6 +5,7 @@
 <h1 class="text-3xl font-extrabold">💸 {{ t('xfer.title') }}</h1>
 {{ giro_card(giro) }}
 {% if error %}<p class="error">{{ t(error) }}</p>{% endif %}
+{% if gap %}{% include "_short.html" %}{% endif %}
 <form method="post" action="/ueberweisen/pruefen" class="space-y-6">
   <section class="space-y-3">
     <h2 class="font-bold">{{ t('xfer.to') }}</h2>

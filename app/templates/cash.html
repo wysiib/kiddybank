@@ -2,10 +2,12 @@
 {% from "_stepper.html" import stepper %}
 {% from "_keypad.html" import keypad %}
 {% from "_giro.html" import giro_card %}
+{% from "_coins.html" import stack %}
 {% block content %}
 {% set out = kind == 'abheben' %}
 {% set key = 'out' if out else 'in' %}
 {% if error %}<p class="error">{{ t(error) }}</p>{% endif %}
+{% if gap %}{% include "_short.html" %}{% endif %}
 {% if not cents %}
 <h1 class="text-3xl font-extrabold">{{ '📤' if out else '📥' }} {{ t('cash.' ~ key ~ '.title') }}</h1>
 {{ giro_card(giro) }}
@@ -18,7 +20,18 @@
 <div class="card space-y-4 text-center">
   <div class="text-7xl">{{ '📤' if out else '📥' }}</div>
   <p class="text-3xl font-extrabold">{{ t('cash.' ~ key ~ '.confirm', amount=cents|money) }}</p>
-  <p class="lesson">{{ t('xfer.before_after', before=giro.balance_cents|money, after=(giro.balance_cents + (-cents if out else cents))|money) }}</p>
+  {% if out %}
+  <div class="grid grid-cols-2 items-end gap-3">
+    <div class="col">{{ stack('big', pic.stay) }}<b>{{ pic.after|money }}</b>{{ t('cash.stays') }}</div>
+    <div class="leave col">
+      {% if lost %}{{ stack('small', 0, ghost=pic.lost_coins, tone='gold') }}{% endif %}
+      {{ stack('big', pic.go) }}<b>{{ cents|money }}</b>{{ t('cash.leaves') }}
+    </div>
+  </div>
+  {% else %}
+  <div class="flex justify-center"><div class="col">{{ stack('big', pic.have, ghost=pic.come) }}<b>{{ t('cash.after', amount=pic.after|money) }}</b></div></div>
+  {% endif %}
+  <p class="text-sm text-slate-500">{{ t('coin.unit', amount=pic.unit|compact) }}{% if out and lost %} · {{ t('coin.unit.small', amount=pic.small|compact) }}{% endif %}</p>
   <p class="lesson">{{ t('cash.' ~ key ~ '.lesson') }}</p>
   {% if out %}
   <p class="lesson">{{ t('cash.out.interest', amount=cents|money, lost=lost|money, per=t('per.' ~ giro.payout_days)) if lost else t('cash.out.interest.plain') }}</p>
