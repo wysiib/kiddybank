@@ -1,0 +1,440 @@
+<title>Kinderbank Münz-Skizzen</title>
+<style>
+/* Single-look page on purpose: it mocks the kid app, which has one light palette (amber-50 ground, pink buttons, sky lesson boxes). */
+:root {
+  --page: #e9ecf3;
+  --ink: #1e293b;
+  --mute: #64748b;
+  --screen: #fffbeb;
+  --card: #ffffff;
+  --pink: #ec4899;
+  --lesson-bg: #e0f2fe;
+  --lesson-ink: #0c4a6e;
+  --silver: #cbd5e1;
+  --silver-edge: #94a3b8;
+  --gold: #fbbf24;
+  --gold-edge: #b45309;
+  --good: #16a34a;
+  --bad: #dc2626;
+  --track: #e2e8f0;
+  --font: ui-rounded, "SF Pro Rounded", "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+* { box-sizing: border-box; }
+body { background: var(--page); color: var(--ink); font-family: var(--font); margin: 0; padding-inline: 16px; padding-block: 32px 64px; line-height: 1.45; }
+main { max-width: 1040px; margin-inline: auto; display: flex; flex-direction: column; gap: 48px; }
+h1 { font-size: clamp(1.9rem, 5vw, 2.6rem); margin: 0 0 8px; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font-size: 1.5rem; margin: 0; text-wrap: balance; }
+p { margin: 0; }
+.intro { max-width: 62ch; color: var(--mute); font-size: 1.05rem; }
+.eyebrow { font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 700; color: var(--mute); }
+
+/* legend */
+.legend { display: flex; flex-wrap: wrap; gap: 12px 28px; align-items: flex-end; background: var(--card); border-radius: 20px; padding: 20px 24px; }
+.legend figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--mute); text-align: center; max-width: 150px; }
+.legend .stack { min-height: 30px; }
+
+/* section */
+.concept { display: flex; flex-direction: column; gap: 14px; }
+.concept > .learn { color: var(--mute); max-width: 70ch; }
+.learn b { color: var(--ink); }
+.row { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 20px; align-items: start; }
+.shot { display: flex; flex-direction: column; gap: 8px; }
+.tag { align-self: flex-start; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; padding: 3px 10px; border-radius: 99px; background: var(--track); color: var(--mute); }
+.tag.new { background: var(--pink); color: #fff; }
+.screen { background: var(--screen); border-radius: 28px; padding: 16px; display: flex; flex-direction: column; gap: 14px; box-shadow: 0 1px 0 rgba(15,23,42,.06), 0 10px 30px -12px rgba(15,23,42,.25); font-size: 1.05rem; }
+.note { font-size: 0.85rem; color: var(--mute); max-width: 46ch; }
+
+/* app-ish parts */
+.card { background: var(--card); border-radius: 24px; padding: 16px; box-shadow: 0 1px 3px rgba(15,23,42,.1); }
+.center { text-align: center; }
+.lesson { background: var(--lesson-bg); color: var(--lesson-ink); border-radius: 16px; padding: 12px 14px; font-size: 1rem; }
+.big { font-size: 2rem; font-weight: 800; }
+.mid { font-size: 1.25rem; font-weight: 800; }
+.mute { color: var(--mute); font-size: 0.9rem; }
+.btn { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; border-radius: 16px; background: var(--pink); color: #fff; font-weight: 800; box-shadow: 0 1px 3px rgba(15,23,42,.2); }
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.tile { background: var(--card); border-radius: 20px; padding: 10px 6px 12px; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; font-weight: 800; font-size: 0.95rem; box-shadow: 0 1px 3px rgba(15,23,42,.1); }
+.tile .days { font-weight: 500; font-size: 0.8rem; color: var(--mute); }
+.old-tower { width: 22px; border-radius: 6px 6px 0 0; }
+
+/* coins: side view stacks. big silver = 1 €, small = 5 Cent interest */
+.stack { display: flex; flex-direction: column-reverse; align-items: center; }
+.stack .c { display: block; border-radius: 99px; }
+.stack.big .c { width: 40px; height: 10px; margin-top: -2px; background: linear-gradient(#e2e8f0, var(--silver)); border: 1.5px solid var(--silver-edge); }
+.stack.small .c { width: 22px; height: 6px; margin-top: -1px; border: 1.25px solid; }
+.stack.gold .c { background: linear-gradient(#fde68a, var(--gold)); border-color: var(--gold-edge); }
+.stack.gray .c { background: linear-gradient(#e2e8f0, var(--silver)); border-color: var(--silver-edge); }
+.stack .c.ghost { background: transparent; border: 1.5px dashed var(--gold-edge); opacity: .65; }
+.stack.big .c.ghost { border-color: var(--silver-edge); }
+.stack.tall { justify-content: flex-start; }
+.pair-stacks { display: flex; align-items: flex-end; justify-content: center; gap: 10px; min-height: 84px; }
+.col { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 0.78rem; color: var(--mute); }
+.col b { color: var(--ink); font-size: 0.85rem; }
+
+/* wait ruler */
+.ruler { width: 100%; height: 8px; border-radius: 99px; background: var(--track); overflow: hidden; }
+.ruler i { display: block; height: 100%; background: var(--gold); border-radius: 99px; }
+
+/* one mini calendar per week of waiting, 7 per row */
+.cals { display: grid; grid-template-columns: repeat(7, 12px); gap: 2px; justify-content: center; align-content: start; min-height: 28px; }
+.cals i.part { transform: scale(var(--k)); transform-origin: left bottom; align-self: end; }
+.cals i { width: 12px; height: 13px; border-radius: 3px; background: #fff; border: 1.5px solid var(--silver-edge); border-top: 4px solid var(--pink); }
+
+/* day strip */
+.days-strip { display: grid; grid-template-columns: repeat(15, 1fr); gap: 3px; }
+.days-strip i { aspect-ratio: 1; border-radius: 4px; background: var(--track); }
+.days-strip i.on { background: var(--gold); }
+.days-strip i.now { background: var(--pink); }
+
+/* pips */
+.pips { display: flex; gap: 6px; }
+.pips i { width: 16px; height: 16px; border-radius: 50%; background: var(--track); border: 2px solid var(--silver); }
+.pips i.on { background: var(--gold); border-color: var(--gold-edge); }
+.pips i.next { border-color: var(--pink); }
+.coin-face { width: 44px; height: 44px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fde68a, var(--gold)); border: 3px solid var(--gold-edge); display: grid; place-items: center; font-weight: 800; color: var(--gold-edge); flex: none; }
+
+/* transfer scene */
+.scene { position: relative; display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: end; min-height: 130px; }
+.scene .who { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.scene .who span { font-size: 2rem; }
+.flight { position: relative; height: 100%; min-height: 100px; }
+.flight .c { position: absolute; left: 50%; bottom: 6px; width: 40px; height: 10px; margin-left: -20px; border-radius: 99px; background: linear-gradient(#e2e8f0, var(--silver)); border: 1.5px solid var(--silver-edge); animation: hop 2.4s ease-in-out infinite; }
+.flight .c:nth-child(2) { animation-delay: .35s; }
+.flight .c:nth-child(3) { animation-delay: .7s; }
+@keyframes hop {
+  0%   { transform: translate(-90px, 0); opacity: 0; }
+  12%  { opacity: 1; }
+  50%  { transform: translate(0, -46px); }
+  88%  { opacity: 1; }
+  100% { transform: translate(90px, 0); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .flight .c { animation: none; opacity: 1; }
+  .flight .c:nth-child(1) { transform: translate(-30px, -10px); }
+  .flight .c:nth-child(2) { transform: translate(0, -24px); }
+  .flight .c:nth-child(3) { transform: translate(30px, -10px); }
+}
+.arrow { color: var(--mute); font-size: 1.4rem; }
+
+/* withdraw */
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: end; }
+.leave { border: 2.5px dashed var(--silver-edge); border-radius: 20px; padding: 10px 6px 8px; background: rgba(255,255,255,.6); }
+
+/* goal slots: 10 fixed slots, each worth a tenth of the price */
+.slots { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; flex: 1; }
+.slots i { aspect-ratio: 1; border-radius: 50%; border: 2px dashed var(--silver-edge); }
+.slots i.on { border: 2px solid var(--gold-edge); background: radial-gradient(circle at 35% 30%, #fde68a, var(--gold)); }
+.slots i.part { border: 2px solid var(--gold-edge); background: linear-gradient(to top, var(--gold) 40%, transparent 40%); }
+.old-bar { height: 20px; border-radius: 99px; background: var(--track); overflow: hidden; }
+.old-bar i { display: block; height: 100%; width: 64%; background: var(--pink); border-radius: 99px; }
+.stack.row-h.small .c { width: 14px; height: 14px; border-radius: 50%; }
+
+/* gap + week */
+.wk { display: grid; grid-template-columns: 5.5rem 1fr auto;  gap: 8px; align-items: center; font-size: 0.95rem; }
+.wk .bar { height: 14px; border-radius: 99px; }
+.wk .in { background: var(--good); }
+.wk .out { background: var(--bad); }
+.stack.row-h { flex-direction: row; gap: 4px; }
+.stack.row-h .c { margin: 0; width: 26px; height: 26px; }
+.stack.row-h.big .c { border-radius: 50%; }
+.stack.row-h.big .c.ghost { border-radius: 50%; }
+.sparkle { animation: tw 1.6s ease-in-out infinite; display: inline-block; }
+@keyframes tw { 50% { transform: scale(1.25) rotate(12deg); } }
+@media (prefers-reduced-motion: reduce) { .sparkle { animation: none; } }
+:focus-visible { outline: 3px solid var(--pink); outline-offset: 2px; }
+</style>
+
+<main>
+  <header>
+    <div class="eyebrow">Kinderbank · Skizzen, keine Implementierung</div>
+    <h1>Münzen statt Sätze</h1>
+    <p class="intro">Die meisten Ideen als Skizze (die Feier-Animationen und der Dauerauftrag-Kreis fehlen noch), damit Erklärungen sichtbar statt lesbar werden. Links jeweils der heutige Stand, rechts der Vorschlag. Die Lernsätze bleiben als Bildunterschrift stehen. Das Bild soll sie tragen, nicht ersetzen. Animationen laufen als CSS-Schleife und stehen bei „Bewegung reduzieren" still.</p>
+  </header>
+
+  <section class="legend" aria-label="Münz-Vokabular">
+    <figure><div class="stack big" data-n="4"></div>Große Silbermünze = <b>1 €</b> von dir</figure>
+    <figure><div class="stack small gray" data-n="4"></div>Kleine graue Münze = <b>5 Cent</b> Zinsen auf dem Konto</figure>
+    <figure><div class="stack small gold" data-n="4"></div>Kleine goldene Münze = <b>5 Cent</b> Zinsen aus der Truhe</figure>
+    <figure><div class="cals" data-n="3" style="min-height:0"></div>Ein Kalender = <b>1 Woche</b> Wartezeit</figure>
+    <figure><div class="stack small gold" data-n="3" data-ghost="2"></div>Gestrichelt = kommt noch, oder du verpasst es</figure>
+  </section>
+
+  <!-- 1 -->
+  <section class="concept">
+    <div>
+      <div class="eyebrow">Idee 1 + 2 · Festgeld</div>
+      <h2>Wie lange warten lohnt sich</h2>
+    </div>
+    <p class="learn"><b>Kind lernt:</b> Länger warten heißt mehr Zinsen, und die Truhe schlägt das Konto. Heute sind alle Laufzeiten dasselbe 🗓️ mit einer Zahl. Neu: eine Reihe Kalenderblätter zeigt die Wartezeit, die Münztürme zeigen den Gewinn (Beispiel: 10 € eingezahlt).</p>
+    <div class="row">
+      <div class="shot">
+        <span class="tag">Heute</span>
+        <div class="screen">
+          <div class="mid">Wie lange warten?</div>
+          <div class="tiles">
+            <div class="tile"><span style="font-size:1.8rem">🗓️</span>Kurz<span class="days">7 Tage</span>
+              <div class="pair-stacks"><div class="col"><b>5 Cent</b><div class="old-tower" style="height:12px;background:#cbd5e1"></div>Konto</div><div class="col"><b>10 Cent</b><div class="old-tower" style="height:20px;background:#fbbf24"></div>Truhe</div></div></div>
+            <div class="tile"><span style="font-size:1.8rem">🗓️</span>Mittel<span class="days">30 Tage</span>
+              <div class="pair-stacks"><div class="col"><b>20 Cent</b><div class="old-tower" style="height:32px;background:#cbd5e1"></div>Konto</div><div class="col"><b>30 Cent</b><div class="old-tower" style="height:48px;background:#fbbf24"></div>Truhe</div></div></div>
+            <div class="tile"><span style="font-size:1.8rem">🗓️</span>Lang<span class="days">90 Tage</span>
+              <div class="pair-stacks"><div class="col"><b>60 Cent</b><div class="old-tower" style="height:72px;background:#cbd5e1"></div>Konto</div><div class="col"><b>1 €</b><div class="old-tower" style="height:100px;background:#fbbf24"></div>Truhe</div></div></div>
+          </div>
+        </div>
+        <p class="note">Die Türme gibt es schon. Was fehlt: Die Wartezeit ist nur Text, und Balken lassen sich schlecht zählen.</p>
+      </div>
+      <div class="shot">
+        <span class="tag new">Neu</span>
+        <div class="screen">
+          <div class="mid">Wie lange warten?</div>
+          <div class="tiles">
+            <div class="tile">Kurz
+              <div class="cals" data-n="1" role="img" aria-label="7 Tage, etwa 1 Wochen"></div><span class="days">7 Tage</span>
+              <div class="pair-stacks"><div class="col"><div class="stack small gray" data-n="1"></div>+5 Ct</div><div class="col"><div class="stack small gold" data-n="2"></div>+10 Ct</div></div></div>
+            <div class="tile">Mittel
+              <div class="cals" data-n="4.29" role="img" aria-label="30 Tage, vier Wochen und zwei Tage"></div><span class="days">30 Tage</span>
+              <div class="pair-stacks"><div class="col"><div class="stack small gray" data-n="4"></div>+20 Ct</div><div class="col"><div class="stack small gold" data-n="6"></div>+30 Ct</div></div></div>
+            <div class="tile">Lang
+              <div class="cals" data-n="12.86" role="img" aria-label="90 Tage, zwölf Wochen und sechs Tage"></div><span class="days">90 Tage</span>
+              <div class="pair-stacks"><div class="col"><div class="stack small gray" data-n="12"></div>+60 Ct</div><div class="col"><div class="stack small gold" data-n="20"></div>+1 €</div></div></div>
+          </div>
+        </div>
+        <p class="note">Gezählt wird in Münzen, der Betrag steht als kleine Zahl dabei (Kinder von 5 bis 8 zählen gern). Ein Kalenderblatt steht für eine Woche: 1, 4 und 12 Blätter. Ist die letzte Woche nicht voll, wird das letzte Blatt kleiner (30 Tage = 4 Wochen und 2 Tage, 90 Tage = 12 Wochen und 6 Tage). Die Blätter füllen Zeile für Zeile, sodass sich die Länge der Wartezeit mit einem Blick vergleichen lässt.</p>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:8px">
+      <div class="shot">
+        <span class="tag">Heute · zu</span>
+        <div class="screen"><div class="card center" style="display:flex;flex-direction:column;gap:8px">
+          <div class="mute">Mittel · 1 % pro Woche</div>
+          <div style="font-size:3rem">🔒</div>
+          <div class="big">10,00 €</div>
+          <div class="mid">⏳ Noch 12 Tage</div>
+          <div class="lesson">Die Truhe bleibt zu, bis die Zeit um ist. Wenn du wartest, bekommst du 10,30 €.</div>
+        </div></div>
+      </div>
+      <div class="shot">
+        <span class="tag new">Neu · zu</span>
+        <div class="screen"><div class="card center" style="display:flex;flex-direction:column;gap:10px">
+          <div class="mute">Mittel · 1 % pro Woche</div>
+          <div class="pair-stacks" style="min-height:120px">
+            <div class="col"><div class="stack big" data-n="10"></div><b>10 €</b>bleibt drin</div>
+            <div class="col"><div class="stack small gold" data-n="0" data-ghost="6"></div><b>+30 Ct</b>kommen dazu</div>
+            <span style="font-size:2.4rem;align-self:center">🔒</span>
+          </div>
+          <div class="days-strip" role="img" aria-label="18 von 30 Tagen vorbei">
+            <i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i>
+            <i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i>
+            <i class="on"></i><i class="on"></i><i class="on"></i><i class="now"></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+          </div>
+          <div class="mid">⏳ Noch 12 Tage</div>
+          <div class="lesson">Die Truhe bleibt zu, bis die Zeit um ist.</div>
+        </div></div>
+        <p class="note">Jeder Tag ist ein Kästchen, das sich füllt. Die gestrichelten Münzen sind die Belohnung, die noch nicht dir gehört.</p>
+      </div>
+      <div class="shot">
+        <span class="tag new">Neu · offen</span>
+        <div class="screen"><div class="card center" style="display:flex;flex-direction:column;gap:10px">
+          <div style="font-size:2.4rem">🎁 <span class="sparkle">✨</span></div>
+          <div class="mid">Fertig! Deine Schatztruhe ist offen.</div>
+          <div class="pair-stacks" style="min-height:120px">
+            <div class="col"><div class="stack big" data-n="10"></div><b>10 €</b>deins</div>
+            <div class="col"><div class="stack small gold" data-n="6"></div><b>+30 Ct</b>extra fürs Warten</div>
+          </div>
+          <div class="big">10,30 €</div>
+          <div class="btn">🎉 Abholen!</div>
+        </div></div>
+        <p class="note">Silber und Gold nebeneinander: Das Geld ist dasselbe geblieben, das Gold ist neu.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 -->
+  <section class="concept">
+    <div>
+      <div class="eyebrow">Idee 3 · Abheben</div>
+      <h2>Was weggeht, arbeitet nicht mehr</h2>
+    </div>
+    <p class="learn"><b>Kind lernt:</b> Abgehobenes Geld bekommt keine Zinsen mehr. Heute sind das drei Textblöcke: „Vorher/Nachher", die Abheben-Erklärung und „du verpasst Zinsen". Neu: der Stapel teilt sich, und über dem Teil, der geht, hängt die Zins-Münze, die dann nicht mehr kommt.</p>
+    <div class="row">
+      <div class="shot">
+        <span class="tag">Heute</span>
+        <div class="screen"><div class="card center" style="display:flex;flex-direction:column;gap:8px">
+          <div style="font-size:3rem">📤</div>
+          <div class="big" style="font-size:1.6rem">Wirklich 5,00 € abheben?</div>
+          <div class="lesson">Vorher 10,00 € · Nachher 5,00 €</div>
+          <div class="lesson">Beim Abheben bekommst du echtes Geld und die Bank zieht es von deinem Konto ab.</div>
+          <div class="lesson">Aber Achtung: Geld auf dem Konto bekommt Zinsen. Wenn du 5,00 € abhebst, verpasst du 5 Cent Zinsen pro Woche.</div>
+        </div></div>
+        <p class="note">Drei Textblöcke, bevor die Eltern ihren Code eingeben.</p>
+      </div>
+      <div class="shot">
+        <span class="tag new">Neu</span>
+        <div class="screen"><div class="card center" style="display:flex;flex-direction:column;gap:10px">
+          <div class="big" style="font-size:1.6rem">📤 Wirklich 5,00 € abheben?</div>
+          <div class="split">
+            <div class="col" style="padding-bottom:8px"><div class="stack big" data-n="5"></div><b>Bleibt: 5,00 €</b>arbeitet weiter</div>
+            <div class="leave col"><div class="stack small gold" data-n="0" data-ghost="1" style="margin-bottom:8px"></div><div class="stack big" data-n="5"></div><b>Geht raus: 5,00 €</b>arbeitet nicht mehr</div>
+          </div>
+          <div class="lesson">🪙 Diese Zins-Münze kommt nächste Woche nicht mehr zu dir. Geld auf dem Konto wächst, Geld in der Hand nicht.</div>
+        </div></div>
+        <p class="note">„Vorher/Nachher" wird zur Stapel-Hälfte. Die Zeile „verpasst 5 Cent" wird zur gestrichelten Münze über dem Stapel, der geht.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 -->
+  <section class="concept">
+    <div>
+      <div class="eyebrow">Idee 4 · Überweisen (Einzahlen wäre dieselbe Szene mit „Eltern" links)</div>
+      <h2>Das Geld zieht um</h2>
+    </div>
+    <p class="learn"><b>Kind lernt:</b> Bei einer Überweisung wandert Geld von meinem Konto auf das Konto von jemand anderem, nichts wird kopiert. Neu: Drei Münzen hüpfen sichtbar von deinem Stapel zu Emmas Stapel.</p>
+    <div class="row">
+      <div class="shot">
+        <span class="tag">Heute</span>
+        <div class="screen"><div class="card center" style="display:flex;flex-direction:column;gap:8px">
+          <div style="font-size:3rem">💸</div>
+          <div class="big" style="font-size:1.6rem">Wirklich 3,00 € an Emma schicken?</div>
+          <div class="lesson">Vorher 10,00 € · Nachher 7,00 €</div>
+          <div class="lesson">Bei einer Überweisung geht das Geld von deinem Konto auf das Konto von jemand anderem.</div>
+        </div></div>
+      </div>
+      <div class="shot">
+        <span class="tag new">Neu (bewegt sich)</span>
+        <div class="screen"><div class="card center" style="display:flex;flex-direction:column;gap:10px">
+          <div class="big" style="font-size:1.6rem">💸 Wirklich 3,00 € an Emma schicken?</div>
+          <div class="scene">
+            <div class="who"><div class="stack big" data-n="7"></div><span>👛</span><b>Du</b><span class="mute">7,00 €</span></div>
+            <div class="flight" aria-hidden="true"><i class="c"></i><i class="c"></i><i class="c"></i></div>
+            <div class="who"><div class="stack big" data-n="4" data-ghost="3"></div><span>🐻</span><b>Emma</b><span class="mute">bekommt 3,00 €</span></div>
+          </div>
+          <div class="lesson">Deine 3 Münzen wandern zu Emma. Bei dir sind sie dann weg.</div>
+        </div></div>
+        <p class="note">Emmas Stapel zeigt die ankommenden Münzen gestrichelt, bis du bestätigst.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5 -->
+  <section class="concept">
+    <div>
+      <div class="eyebrow">Idee 5 · Startseite</div>
+      <h2>Wann kommen die Zinsen?</h2>
+    </div>
+    <p class="learn"><b>Kind lernt:</b> Zinsen kommen nach einer Wartezeit, nicht sofort. Neu: eine Reihe Punkte zählt bis zum nächsten Zins-Tag, der Punkt am Ende ist die Münze.</p>
+    <div class="row">
+      <div class="shot">
+        <span class="tag">Heute</span>
+        <div class="screen"><div class="card" style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;justify-content:space-between"><b>👛 Mein Konto</b><span class="mute">Girokonto</span></div>
+          <div class="big" style="font-size:2.4rem">24,50 €</div>
+          <div class="lesson">In 3 Tagen bekommst du etwa 12 Cent Zinsen.</div>
+        </div></div>
+      </div>
+      <div class="shot">
+        <span class="tag new">Neu</span>
+        <div class="screen"><div class="card" style="display:flex;flex-direction:column;gap:8px">
+          <div style="display:flex;justify-content:space-between"><b>👛 Mein Konto</b><span class="mute">Girokonto</span></div>
+          <div class="big" style="font-size:2.4rem">24,50 €</div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <div class="pips" role="img" aria-label="4 von 7 Tagen um"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="next"></i><i></i><i></i></div>
+            <span>→</span>
+            <div class="coin-face">12</div>
+          </div>
+          <div class="lesson">In 3 Tagen bekommst du etwa 12 Cent Zinsen.</div>
+        </div></div>
+        <p class="note">Länge der Punktreihe = Auszahlperiode des Kindes (7 / 30 / 365 Tage). Bei 30 oder 365 Tagen wird sie zum Balken, nicht zu 365 Punkten.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- goals -->
+  <section class="concept">
+    <div>
+      <div class="eyebrow">Idee 10 · Sparziele (der einzige Balken, der heute wirklich einer ist)</div>
+      <h2>Zehn Plätze füllen sich</h2>
+    </div>
+    <p class="learn"><b>Kind lernt:</b> Ein Sparziel ist ein Preis, den man Stück für Stück erreicht. Heute ist es ein rosa Balken in Prozent. Neu: zehn leere Münzplätze, jeder ist ein Zehntel vom Preis. Der letzte angefangene Platz füllt sich nur zum Teil. Zehn kann jedes Kind zählen, egal ob das Ziel 8 € oder 200 € kostet.</p>
+    <div class="row">
+      <div class="shot">
+        <span class="tag">Heute</span>
+        <div class="screen"><div class="card center" style="display:flex;flex-direction:column;gap:10px">
+          <div style="font-size:4rem">🚲</div>
+          <div class="mid">Fahrrad</div>
+          <div class="old-bar"><i></i></div>
+          <div class="mute">19,20 € / 30,00 €</div>
+          <div class="mid">Noch 10,80 € bis dahin</div>
+        </div></div>
+      </div>
+      <div class="shot">
+        <span class="tag new">Neu</span>
+        <div class="screen"><div class="card center" style="display:flex;flex-direction:column;gap:10px">
+          <div class="mid">Fahrrad</div>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div class="slots" role="img" aria-label="6 von 10 Plätzen voll, der siebte zur Hälfte"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="part"></i><i></i><i></i><i></i></div>
+            <span style="font-size:2.6rem;filter:grayscale(.36)">🚲</span>
+          </div>
+          <div class="mute">Ein Platz = 3,00 €</div>
+          <div class="mid">Noch 10,80 € bis dahin</div>
+        </div></div>
+        <p class="note">Das Ziel steht am Ende der Reihe wie ein Preis am Regal. Das Foto, das langsam von grau zu bunt wird, bleibt, weil das ein stufenloser Übergang ohne Einheit ist. Ein Bild wird nicht sinnvoller, wenn man es in Stücke teilt.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7 + 8 -->
+  <section class="concept">
+    <div>
+      <div class="eyebrow">Ideen 7 + 8 · Kleinigkeiten</div>
+      <h2>Wochenbilanz und „zu wenig Geld"</h2>
+    </div>
+    <div class="row">
+      <div class="shot">
+        <span class="tag new">Neu · Deine Woche (Münzen statt Balken)</span>
+        <div class="screen"><div class="card" style="display:flex;flex-direction:column;gap:10px">
+          <b>📅 Deine Woche</b>
+          <div class="wk"><span>Taschengeld</span><div class="stack row-h big" data-n="5"></div><b style="color:var(--good)">+5,00 €</b></div>
+          <div class="wk"><span>Zinsen</span><div class="stack row-h small gold" data-n="2"></div><b style="color:var(--good)">+0,12 €</b></div>
+          <div class="wk"><span>Ausgegeben</span><div class="stack row-h big" data-n="3"></div><b style="color:var(--bad)">−3,10 €</b></div>
+          <div class="lesson">Taschengeld und Zinsen kommen rein. Was du ausgibst, geht raus.</div>
+        </div></div>
+        <p class="note">Gleiches Münz-Vokabular wie überall: 12 Cent sind zwei kleine Münzen neben fünf großen, also klein, aber sichtbar. Ab etwa 10 großen Münzen pro Zeile bräuchte es die Rollen-Regel (siehe Fragen unten).</p>
+      </div>
+      <div class="shot">
+        <span class="tag new">Neu · Nicht genug Geld</span>
+        <div class="screen"><div class="card center" style="display:flex;flex-direction:column;gap:10px">
+          <div class="mid">Du hast nicht genug Geld dafür.</div>
+          <div class="pair-stacks" style="min-height:70px;gap:24px">
+            <div class="col"><div class="stack row-h big" data-n="3"></div><b>Du hast 3 €</b></div>
+            <div class="col"><div class="stack row-h big" data-n="3" data-ghost="2"></div><b>Du brauchst 5 €</b></div>
+          </div>
+          <div class="lesson">Dir fehlen noch 2 Münzen.</div>
+        </div></div>
+        <p class="note">Ersetzt <code>err.insufficient</code> (nur Satz) durch das Fehlende.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="card" style="display:flex;flex-direction:column;gap:10px">
+    <h2 style="font-size:1.2rem">Offene Fragen, bevor daraus ein Spec wird</h2>
+    <p class="intro" style="max-width:none">1. <b>Maßstab:</b> Große Silbermünze = 1 €, kleine = 5 Cent. Bei Taschengeld über etwa 15 € wird der Stapel zu hoch. Vorschlag: ab 10 Münzen wechselt der Stapel auf „Münzrollen" (eine Rolle = 10 €), oder er wird gedeckelt und zeigt ein „×" mit der Zahl.<br>
+    2. <b>Zins-Münze unter 5 Cent:</b> Bei kleinen Beträgen kommt 0 Münzen heraus. Vorschlag: mindestens eine gestrichelte Münze anzeigen, wenn der Zins &gt; 0 ist.<br>
+    3. <b>Dieselbe Münz-Bauart</b> als Jinja-Macro <code>_coins.html</code>, reines HTML/CSS ohne JS, also passend zur bestehenden Frontend-Regel.</p>
+  </section>
+</main>
+
+<script>
+// Builds coin stacks from data-n (solid) and data-ghost (dashed, drawn on top) so the markup above stays readable.
+// A fractional data-n (weeks) ends in a smaller calendar, so 30 days reads as 4 weeks and 2 days.
+document.querySelectorAll('.cals').forEach(function (el) {
+  var n = parseFloat(el.dataset.n), full = Math.floor(n), rest = n - full, i;
+  for (i = 0; i < full; i++) el.appendChild(document.createElement('i'));
+  if (rest > 0.02) { var part = document.createElement('i'); part.className = 'part'; part.style.setProperty('--k', Math.max(rest, 0.45)); el.appendChild(part); }
+});
+document.querySelectorAll('.stack').forEach(function (el) {
+  var n = +el.dataset.n || 0, g = +el.dataset.ghost || 0, i;
+  for (i = 0; i < n; i++) el.appendChild(Object.assign(document.createElement('i'), { className: 'c' }));
+  for (i = 0; i < g; i++) el.appendChild(Object.assign(document.createElement('i'), { className: 'c ghost' }));
+});
+</script>
