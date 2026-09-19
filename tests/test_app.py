@@ -290,3 +290,12 @@ def test_home_week_card(family):
             s.delete(tx)
         s.commit()
     assert "Deine Woche" not in family.get("/home").text  # empty week: no card
+
+
+def test_edit_dauerauftrag(family):
+    family.post("/eltern/dauerauftrag", data={"kid_id": 2, "amount": "2,00", "interval": "weekly", "weekday": 4})
+    family.post("/eltern/dauerauftrag/1", data={"amount": "3,50", "interval": "monthly", "weekday": 4, "monthday": 15})
+    with Session(main._engine()) as s:
+        r = s.exec(select(main.RecurringRule)).one()
+        assert (r.amount_cents, r.interval, r.next_run.day) == (350, "monthly", 15)
+    assert 'value="3,50"' in family.get("/eltern").text

@@ -514,22 +514,40 @@ def book(request: Request, account_id: int = Form(...), amount: str = Form(...),
     return redirect("/eltern")
 
 
+def _rule_input(amount: str, interval: str, weekday: int, monthday: int) -> tuple[int, str, int]:
+    cents = parse_euro(amount)
+    if cents <= 0 or interval not in ("weekly", "monthly") or not (0 <= weekday <= 6 and 1 <= monthday <= 28):
+        raise LedgerError("err.amount")
+    return cents, interval, weekday if interval == "weekly" else monthday
+
+
 @app.post("/eltern/dauerauftrag")
 def add_rule(request: Request, kid_id: int = Form(...), amount: str = Form(...), interval: str = Form(...),
              weekday: int = Form(0), monthday: int = Form(1), user: User = Depends(parent),
              s: Session = Depends(get_session), today: date = Depends(get_today)):
     try:
-        cents = parse_euro(amount)
-        if cents <= 0 or interval not in ("weekly", "monthly"):
-            raise LedgerError("err.amount")
-        anchor = weekday if interval == "weekly" else monthday
-        if not (0 <= weekday <= 6 and 1 <= monthday <= 28):
-            raise LedgerError("err.amount")
+        cents, interval, anchor = _rule_input(amount, interval, weekday, monthday)
     except LedgerError as e:
         return _parent_page(request, s, user, e.args[0])
-    first = ledger.first_run(interval, anchor, today)
     s.add(RecurringRule(from_account_id=None, to_account_id=ledger.get_account(s, kid_id, "giro").id,
-                        amount_cents=cents, interval=interval, next_run=first))
+                        amount_cents=cents, interval=interval, next_run=ledger.first_run(interval, anchor, today)))
+    return redirect("/eltern")
+
+
+@app.post("/eltern/dauerauftrag/{rule_id}")
+def edit_rule(request: Request, rule_id: int, amount: str = Form(...), interval: str = Form(...),
+              weekday: int = Form(0), monthday: int = Form(1), user: User = Depends(parent),
+              s: Session = Depends(get_session), today: date = Depends(get_today)):
+    r = s.get(RecurringRule, rule_id)
+    if not r:
+        raise HTTPException(404)
+    try:
+        cents, interval, anchor = _rule_input(amount, interval, weekday, monthday)
+    except LedgerError as e:
+        return _parent_page(request, s, user, e.args[0])
+    # pay out anything already due under the old schedule before moving next_run
+    ledger.ensure_up_to_date(s, s.get(Account, r.to_account_id), today)
+    r.amount_cents, r.interval, r.next_run = cents, interval, ledger.first_run(interval, anchor, today)
     return redirect("/eltern")
 
 

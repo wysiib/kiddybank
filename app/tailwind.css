@@ -17,6 +17,9 @@
 @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-12px); } 75% { transform: translateX(12px); } }
 @keyframes pop { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 
+/* standing-order form: show only the day field that matches the chosen interval */
+.rule-form:has([name=interval] [value=weekly]:checked) .f-monthday,
+.rule-form:has([name=interval] [value=monthly]:checked) .f-weekday { display: none; }
 .fall { position: fixed; top: -3rem; font-size: 2.5rem; animation: fall 3.5s linear infinite; pointer-events: none; }
 .shake { animation: shake 0.4s; }
 .pop { animation: pop 0.4s ease-out; }
