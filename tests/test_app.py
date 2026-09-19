@@ -1,11 +1,11 @@
 import re
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
-from app import ledger, main
+from app import auth, ledger, main
 from app.models import Transaction
 
 D0 = date(2026, 1, 1)
@@ -395,3 +395,24 @@ def test_double_tap_books_once(family):
     family.post("/festgeld/oeffnen", data=sent)
     assert giro_cents(2) == 400
     assert family.post("/festgeld/oeffnen", data={"cents": 100, "product_id": 1}).headers["location"] == "/festgeld"  # no token at all
+
+
+def test_wrong_pins_lock_the_account_for_a_while(family):
+    for _ in range(auth.MAX_PIN_FAILURES):
+        assert "Oh nein" in login(family, 2, "0000").text
+    assert "Zu oft falsch" in login(family, 2, "1111").text  # even the right PIN waits now
+    with Session(main._engine()) as s:
+        s.get(main.User, 2).locked_until = datetime.now() - timedelta(seconds=1)
+        s.commit()
+    assert login(family, 2, "1111").headers["location"] == "/"
+    with Session(main._engine()) as s:
+        assert s.get(main.User, 2).pin_failures == 0
+
+
+def test_kid_cannot_guess_the_parent_pin_at_the_cash_desk(family):
+    login(family, 2, "1111")
+    tok = token(family.post("/bar/einzahlen/pruefen", data={"cents": 500}))
+    for _ in range(auth.MAX_PIN_FAILURES):
+        assert "nicht der Code" in family.post("/bar/einzahlen", data={"cents": 500, "pin": "0000", "tok": tok}).text
+    r = family.post("/bar/einzahlen", data={"cents": 500, "pin": "1234", "tok": token(family.post("/bar/einzahlen/pruefen", data={"cents": 500}))})
+    assert "Zu oft falsch" in r.text and giro_cents(2) == 1000  # the right PIN is refused while locked

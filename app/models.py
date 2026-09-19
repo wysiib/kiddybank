@@ -13,6 +13,8 @@ class User(SQLModel, table=True):
     # per-kid modules, toggled by a parent; enforced in the routes, existing deposits/holdings stay reachable
     festgeld_enabled: bool = True
     stocks_enabled: bool = True
+    pin_failures: int = 0  # consecutive wrong PINs, see auth.pin_failed
+    locked_until: datetime | None = None
 
 
 class FestgeldProduct(SQLModel, table=True):
@@ -114,6 +116,8 @@ class Holding(SQLModel, table=True):
 ADDED_COLUMNS = (
     ("account", "payout_days", "INTEGER NOT NULL DEFAULT 7", None),
     ("festgeldproduct", "rate_days", "INTEGER NOT NULL DEFAULT 365", None),
+    ("user", "pin_failures", "INTEGER NOT NULL DEFAULT 0", None),
+    ("user", "locked_until", "DATETIME", None),
 )
 
 
@@ -121,9 +125,9 @@ def _migrate(engine) -> None:
     """create_all only makes missing tables, so older DBs get columns added later here."""
     with engine.begin() as conn:
         for table, column, ddl, after in ADDED_COLUMNS:
-            have = {row[1] for row in conn.exec_driver_sql(f"PRAGMA table_info({table})")}
+            have = {row[1] for row in conn.exec_driver_sql(f"PRAGMA table_info(\"{table}\")")}
             if column not in have:
-                conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
+                conn.exec_driver_sql(f"ALTER TABLE \"{table}\" ADD COLUMN {column} {ddl}")
                 if after:
                     conn.exec_driver_sql(after)
 

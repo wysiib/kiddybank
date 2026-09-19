@@ -13,6 +13,7 @@ from sqlmodel import Session, select
 from starlette.middleware.sessions import SessionMiddleware
 
 from . import ledger
+from . import auth
 from .auth import verify_pin
 from .i18n import LOCALE, format_date, format_money, format_percent, t
 from .ledger import LedgerError
@@ -206,8 +207,12 @@ def pin_submit(request: Request, uid: int, pin: str = Form(...), s: Session = De
     user = s.get(User, uid)
     if not user:
         return redirect("/login")
+    if auth.locked(user):
+        return render(request, "pin.html", 200, who=user, error="err.locked")
     if not verify_pin(pin, user.pin_hash):
+        auth.pin_failed(user)
         return render(request, "pin.html", 200, who=user, error="login.pin.wrong")
+    auth.pin_ok(user)
     request.session.clear()
     request.session["uid"] = user.id
     return redirect("/")
@@ -387,8 +392,12 @@ def cash_do(request: Request, kind: str, cents: int = Form(...), pin: str = Form
         if kind not in CASH:
             raise LedgerError("err.amount")
         ledger.check_amount(cents)  # a negative amount would flip the direction of the booking
+        if auth.locked(user):
+            return _cash_page(request, s, user, kind, cents, "err.locked")
         if not any(verify_pin(pin, p.pin_hash) for p in parents):
-            raise LedgerError("cash.pin.wrong")
+            auth.pin_failed(user)  # returned, not raised: the rollback below would throw the count away
+            return _cash_page(request, s, user, kind, cents, "cash.pin.wrong")
+        auth.pin_ok(user)
         if not use_token(request, "cash", tok):  # a double tap: the first request already did it
             return redirect("/home")
         ledger.manual_booking(s, giro, cents if kind == "einzahlen" else -cents, today)

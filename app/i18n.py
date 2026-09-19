@@ -150,6 +150,7 @@ STRINGS = {
         "err.forbidden": "Das darfst du nicht.",
         "err.pin_format": "Der Code muss aus 4 Zahlen bestehen.",
         "err.rate": "Der Zinssatz ist ungültig oder zu hoch (höchstens 100 Prozent pro Woche).",
+        "err.locked": "Zu oft falsch getippt. Warte ein paar Minuten und versuche es dann noch einmal.",
         "err.name": "Bitte gib einen Namen ein.",
         "err.goal_empty": "Gib dem Sparziel einen Namen oder mach ein Foto.",
         "err.goal_limit": "Du hast schon 3 Sparziele. Schaffe erst eins davon!",
