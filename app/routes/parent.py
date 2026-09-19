@@ -8,7 +8,7 @@ from sqlmodel import Session, select
 from .. import auth, festgeld, goals, ledger
 from ..auth import hash_pin
 from ..ledger import LedgerError
-from ..models import Account, FestgeldProduct, RecurringRule, User
+from ..models import Account, FestgeldProduct, Goal, RecurringRule, User
 from ..web import (
     child_or_404,
     db,
@@ -145,6 +145,13 @@ def edit_rule(request: Request, rule_id: int, amount: str = Form(...), interval:
 def delete_rule(rule_id: int, user: User = Depends(parent), s: Session = db):
     if r := s.get(RecurringRule, rule_id):
         s.delete(r)
+    return redirect("/eltern")
+
+
+@router.post("/eltern/ziele/{goal_id}/loeschen")
+def delete_goal(goal_id: int, user: User = Depends(parent), s: Session = db):
+    if g := s.get(Goal, goal_id):
+        s.delete(g)  # progress-only, nothing was booked; unlike the kid, a parent may also clear finished goals
     return redirect("/eltern")
 
 

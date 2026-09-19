@@ -57,6 +57,7 @@
           <div>{{ '✅ ' if c.goal.done_at }}{{ c.goal.name ~ ' · ' if c.goal.name }}{{ c.goal.target_cents|money }}</div>
           {{ bar(c.pct) }}
         </div>
+        <form method="post" action="/eltern/ziele/{{ c.goal.id }}/loeschen"><button class="btn btn-alt">🗑️ {{ t('goal.delete') }}</button></form>
       </div>
       {% endfor %}
     </div>

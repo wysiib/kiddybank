@@ -281,6 +281,18 @@ def test_parent_sees_kids_goals(family):
     assert "Lego" in page and "/ziele/1/bild" in page and "20,00 €" in page
 
 
+def test_parent_deletes_goal_even_when_finished(family):
+    login(family, 2, "1111")
+    add_goal(family, name="Ball", cents=500)  # affordable
+    family.post("/ziele/1/geschafft")
+    login(family, 2, "1111")
+    assert family.post("/eltern/ziele/1/loeschen").status_code == 403  # kids cannot use the parent route
+    login(family, 1, "1234")
+    assert "Ball" in family.get("/eltern").text
+    assert family.post("/eltern/ziele/1/loeschen").status_code == 303
+    assert "Ball" not in family.get("/eltern").text
+
+
 def test_parent_sees_kid_statement(family):
     login(family, 1, "1234")
     page = family.get("/eltern/kinder/2/konto")

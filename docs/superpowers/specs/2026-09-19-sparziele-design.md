@@ -9,7 +9,7 @@ the wording never assumes a purchase.
 - **Progress only, no earmarking.** A goal is a label, a target and an optional photo. Progress is
   `giro.balance_cents / target_cents`, capped at 100 %. No money is locked, no ledger rule changes,
   and it is not a Spar account (see CLAUDE.md product constraints).
-- **Kid creates, parent can see.** Parents get a read-only list per kid in `/eltern`.
+- **Kid creates, parent can see and delete.** Parents get a list per kid in `/eltern` with a delete button on every goal, finished ones included (the kid cannot delete those): `POST /eltern/ziele/{id}/loeschen`.
 - **Reached = celebrate, then the kid taps "Ziel geschafft!"** which archives the goal. The app never
   books money for it; the parent books any withdrawal via the existing manual booking.
 - **Photo is the primary visual**, because 5-year-olds cannot read or type. Emoji is the fallback.
