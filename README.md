@@ -2,6 +2,10 @@
 
 A self-hosted banking simulation for kids aged 5–8. It teaches how a bank works — balances, pocket money, interest, fixed-term deposits, saving goals — using play money that the parents control. No real money is involved and nothing connects to a real bank.
 
+> **Note:** This project was built with heavy AI assistance (Claude Code). I review and test
+> the code, but it hasn't had an independent audit. It's a play-money simulation for a family
+> setting, so don't use it for real financial data or expose it to untrusted users.
+
 The UI is in German. All text goes through a small i18n layer, so other languages can be added.
 
 ## Features
