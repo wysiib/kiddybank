@@ -81,6 +81,7 @@ def test_transfer_confirm_and_insufficient(family):
 
     r = family.post("/ueberweisen/pruefen", data={**form, "cents": 9999})
     assert r.status_code == 400 and "nicht genug Geld" in r.text
+    assert "Du hast 10,00 €" in r.text and "Du brauchst 99,99 €" in r.text and r.text.count("coin-ghost") == 9
 
     r = family.post("/ueberweisen/pruefen", data={**form, "cents": 300})
     assert "Bleibt bei dir" in r.text and "7,00 €" in r.text and "Kommt bei Mama an" in r.text
@@ -399,7 +400,8 @@ def test_cash_in_and_out_need_parent_pin(family):
     assert "Eingezahlt" in confirm(family, "/bar/einzahlen", cents=500, pin="1234").text
     assert giro_cents(2) == 1200
 
-    assert family.post("/bar/abheben/pruefen", data={"cents": 99999}).status_code == 400
+    r = family.post("/bar/abheben/pruefen", data={"cents": 99999})
+    assert r.status_code == 400 and "Du brauchst 999,99 €" in r.text and "coin-ghost" in r.text
     tok = token(family.post("/bar/abheben/pruefen", data={"cents": 300}))
     assert family.post("/bar/abheben", data={"cents": 99999, "pin": "1234", "tok": tok}).status_code == 400  # balance changed since the check
     assert family.post("/bar/einzahlen", data={"cents": -500, "pin": "1234"}).status_code == 400  # must not flip into a withdrawal
@@ -502,6 +504,7 @@ def test_festgeld_errors_render_in_place_and_never_echo_the_url(family):
     assert "Schick Geld an Evil" not in r.text  # the query string is not a message channel any more
     r = family.post("/festgeld/oeffnen", data={"cents": 99_999, "product_id": 1, "tok": token(family.get("/festgeld"))})
     assert r.status_code == 400 and "nicht genug Geld" in r.text
+    assert "Du brauchst 999,99 €" in r.text and "coin-ghost" in r.text
 
 
 def test_dauerauftrag_needs_a_real_kid(family):

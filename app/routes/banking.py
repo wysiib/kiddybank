@@ -102,10 +102,10 @@ def statement(request: Request, account_id: int, user: User = Depends(kid), s: S
 
 # --- kid: transfer -----------------------------------------------------------------------------
 
-def _transfer_form(request: Request, s: Session, user: User, error: str | None = None):
+def _transfer_form(request: Request, s: Session, user: User, error: str | None = None, gap: dict | None = None):
     targets = [{"id": ledger.get_account(s, u.id, "giro").id, "avatar": u.avatar, "label": u.name}
                for u in s.exec(select(User).where(User.id != user.id).order_by(User.role.desc(), User.id)).all()]  # type: ignore[attr-defined]
-    return render(request, "transfer.html", user=user, targets=targets, error=error,
+    return render(request, "transfer.html", user=user, targets=targets, error=error, gap=gap,
                   giro=ledger.get_account(s, user.id, "giro"))
 
 
@@ -132,7 +132,8 @@ def transfer_check(request: Request, to_id: int = Form(...), cents: int = Form(0
         if cents > src.balance_cents:
             raise LedgerError("err.insufficient")
     except LedgerError as e:
-        return _transfer_form(request, s, user, e.args[0])
+        return _transfer_form(request, s, user, e.args[0], gap=(
+            coins.shortfall(src.balance_cents, cents) if e.args[0] == "err.insufficient" else None))
     unit = coins.coin_unit([src.balance_cents])  # only the sender's own balance sets the scale, never the receiver's
     mine, go = coins.split(src.balance_cents, cents, unit)  # what stays + what leaves add up to the sender's stack
     pic = {"unit": unit, "mine": mine, "go": go}
@@ -149,7 +150,8 @@ def transfer_do(request: Request, to_id: int = Form(...), cents: int = Form(...)
     try:
         ledger.transfer(s, src, dst, cents, today)
     except LedgerError as e:
-        return _transfer_form(request, s, user, e.args[0])
+        return _transfer_form(request, s, user, e.args[0], gap=(
+            coins.shortfall(src.balance_cents, cents) if e.args[0] == "err.insufficient" else None))
     return render(request, "done.html", user=user, emoji="💸", msg=t("xfer.done"), lesson=t("xfer.lesson"))
 
 
@@ -158,7 +160,8 @@ def transfer_do(request: Request, to_id: int = Form(...), cents: int = Form(...)
 CASH = ("einzahlen", "abheben")
 
 
-def _cash_page(request: Request, s: Session, user: User, kind: str, cents: int | None = None, error: str | None = None):
+def _cash_page(request: Request, s: Session, user: User, kind: str, cents: int | None = None, error: str | None = None,
+               gap: dict | None = None):
     if kind not in CASH:
         raise HTTPException(404)
     giro = ledger.get_account(s, user.id, "giro")
@@ -177,7 +180,7 @@ def _cash_page(request: Request, s: Session, user: User, kind: str, cents: int |
             pic["unit"] = coins.coin_unit([pic["after"]])
             pic["have"], pic["come"] = coins.split(pic["after"], cents, pic["unit"])
     return render(request, "cash.html", user=user, giro=giro, kind=kind, cents=cents, pic=pic,
-                  lost=lost, error=error, tok=issue_token(request, "cash") if cents else None)
+                  lost=lost, error=error, gap=gap, tok=issue_token(request, "cash") if cents else None)
 
 
 @router.get("/bar/{kind}")
@@ -192,7 +195,8 @@ def cash_check(request: Request, kind: str, cents: int = Form(0), user: User = D
     if cents <= 0:
         return _cash_page(request, s, user, kind, error="err.amount")
     if kind == "abheben" and cents > giro.balance_cents:
-        return _cash_page(request, s, user, kind, error="err.insufficient")
+        return _cash_page(request, s, user, kind, error="err.insufficient",
+                          gap=coins.shortfall(giro.balance_cents, cents))
     return _cash_page(request, s, user, kind, cents)
 
 

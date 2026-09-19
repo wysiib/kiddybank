@@ -109,6 +109,8 @@ STRINGS = {
         "fg.days.1": "1 Tag",
         "fg.cent": "{n} Cent",
         "coin.unit": "Große Münze = {amount}",
+        "short.have": "Du hast {amount}",
+        "short.need": "Du brauchst {amount}",
         "cash.stays": "Bleibt auf dem Konto",
         "cash.leaves": "Geht raus",
         "cash.after": "Danach hast du {amount}",

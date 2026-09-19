@@ -7,6 +7,7 @@
 {% set out = kind == 'abheben' %}
 {% set key = 'out' if out else 'in' %}
 {% if error %}<p class="error">{{ t(error) }}</p>{% endif %}
+{% if gap %}{% include "_short.html" %}{% endif %}
 {% if not cents %}
 <h1 class="text-3xl font-extrabold">{{ '📤' if out else '📥' }} {{ t('cash.' ~ key ~ '.title') }}</h1>
 {{ giro_card(giro) }}

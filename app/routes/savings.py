@@ -43,13 +43,14 @@ def _deposit_row(a: Account, today: date) -> dict:
             "pips": (-(-total // unit), max(0, total - left) // unit)}
 
 
-def _festgeld_page(request: Request, s: Session, user: User, today: date, error: str | None = None):
+def _festgeld_page(request: Request, s: Session, user: User, today: date, error: str | None = None,
+                   gap: dict | None = None):
     deposits = active_deposits(s, user)
     if not user.festgeld_enabled and not deposits:
         raise HTTPException(403, "err.module_off")
     rows = [_deposit_row(a, today) for a in deposits]
     products, view = festgeld.offer_stacks(s, ledger.get_account(s, user.id, "giro"), 0)
-    return render(request, "festgeld.html", user=user, rows=rows, products=products, view=view, error=error,
+    return render(request, "festgeld.html", user=user, rows=rows, products=products, view=view, error=error, gap=gap,
                   tok=issue_token(request, "festgeld"), days=ledger.get_account(s, user.id, "giro").payout_days)
 
 
@@ -82,7 +83,9 @@ def festgeld_open(request: Request, cents: int = Form(0), product_id: int = Form
             raise LedgerError("err.term")
         festgeld.open_festgeld(s, ledger.get_account(s, user.id, "giro"), cents, product, today)
     except LedgerError as e:
-        return _festgeld_page(request, s, user, today, e.args[0])
+        return _festgeld_page(request, s, user, today, e.args[0], gap=(
+            coins.shortfall(ledger.get_account(s, user.id, "giro").balance_cents, cents)
+            if e.args[0] == "err.insufficient" else None))
     return redirect("/festgeld")
 
 

@@ -5,6 +5,7 @@
 <h1 class="text-3xl font-extrabold">🧰 {{ t('fg.title') }} <span class="text-base font-normal text-slate-500">{{ t('acct.festgeld.sub') }}</span></h1>
 <p class="lesson">{{ t('fg.lesson') }}</p>
 {% if error %}<p class="error">{{ t(error) }}</p>{% endif %}
+{% if gap %}{% include "_short.html" %}{% endif %}
 
 {% for r in rows %}
 <div class="card space-y-3 text-center">
