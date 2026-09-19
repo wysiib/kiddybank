@@ -128,11 +128,32 @@ def manual_booking(s: Session, acc: Account, cents: int, today: date, note: str 
 # --- lazy catch-up -----------------------------------------------------------------------------
 
 def ensure_up_to_date(s: Session, acc: Account, today: date) -> None:
-    """Must run before ANY balance change, so interest is computed on the balance that actually held."""
+    """Replay what a scheduler would have done since the last visit, in date order: interest payouts (every
+    payout_days from interest_paid_on) and allowance runs. Nothing can change a balance without passing here first,
+    so the balance was constant in between and each period's interest is exact and compounds like the real thing."""
     if acc.type == "festgeld":
         return
-    accrue_interest(s, acc, today)
-    run_recurring(s, acc, today)
+    rules = s.exec(select(RecurringRule).where(RecurringRule.to_account_id == acc.id)).all()
+    src = {r.id: s.get(Account, r.from_account_id) if r.from_account_id else None for r in rules}
+    while True:
+        payout_day = acc.interest_paid_on + timedelta(days=acc.payout_days)
+        rule = min(rules, key=lambda r: r.next_run, default=None)
+        if rule and rule.next_run < payout_day:  # on the same day the interest (00:00) comes before the allowance (08:00)
+            day = rule.next_run
+        else:
+            day, rule = payout_day, None
+        if day > today:
+            break
+        _accrue(acc, day)
+        if rule:
+            try:
+                _post(s, src[rule.id], acc, rule.amount_cents, "dauerauftrag", datetime.combine(day, time(8)))
+            except LedgerError:
+                pass  # ponytail: payer lacks funds, that occurrence is skipped
+            rule.next_run = _next_run(day, rule.interval)
+        else:
+            _pay_interest(s, acc, day)
+    _accrue(acc, today)
 
 
 def catch_up_user(s: Session, user_id: int, today: date) -> None:
@@ -145,19 +166,21 @@ def _round_cents(units: int) -> int:
     return (units + INTEREST_DENOM // 2) // INTEREST_DENOM
 
 
-def accrue_interest(s: Session, acc: Account, today: date) -> None:
-    days = (today - acc.last_updated).days
+def _accrue(acc: Account, day: date) -> None:
+    days = (day - acc.last_updated).days
     if days <= 0:
         return
     if acc.balance_cents > 0:
         acc.interest_accrued += acc.balance_cents * acc.interest_rate_bp * days
-    acc.last_updated = today
-    if (today - acc.interest_paid_on).days >= acc.payout_days:
-        cents = _round_cents(acc.interest_accrued)
-        acc.interest_accrued -= cents * INTEREST_DENOM  # carry may be slightly negative after rounding up
-        acc.interest_paid_on = today
-        if cents:
-            _post(s, None, acc, cents, "zins", datetime.combine(today, time(0)))
+    acc.last_updated = day
+
+
+def _pay_interest(s: Session, acc: Account, day: date) -> None:
+    cents = _round_cents(acc.interest_accrued)
+    acc.interest_accrued -= cents * INTEREST_DENOM  # carry may be slightly negative after rounding up
+    acc.interest_paid_on = day
+    if cents:
+        _post(s, None, acc, cents, "zins", datetime.combine(day, time(0)))
 
 
 def next_interest(acc: Account, today: date) -> tuple[int, int]:
@@ -182,19 +205,6 @@ def first_run(interval: str, anchor: int, today: date) -> date:
         return today + timedelta(days=(anchor - today.weekday()) % 7 or 7)
     d = today.replace(day=anchor)
     return d if d > today else _next_run(d, "monthly")
-
-
-def run_recurring(s: Session, acc: Account, today: date) -> None:
-    rules = s.exec(select(RecurringRule).where(RecurringRule.to_account_id == acc.id,
-                                               RecurringRule.next_run <= today)).all()
-    for r in rules:
-        src = s.get(Account, r.from_account_id) if r.from_account_id else None
-        while r.next_run <= today:
-            try:
-                _post(s, src, acc, r.amount_cents, "dauerauftrag", datetime.combine(r.next_run, time(8)))
-            except LedgerError:
-                pass  # ponytail: payer lacks funds, that occurrence is skipped
-            r.next_run = _next_run(r.next_run, r.interval)
 
 
 # --- festgeld ----------------------------------------------------------------------------------

@@ -68,10 +68,26 @@ def test_interest_is_weekly_exact_and_idempotent(s, kids):
     assert sp.balance_cents == 10_000  # not a payout day yet
 
     ledger.ensure_up_to_date(s, sp, D0 + timedelta(days=30))
-    assert sp.balance_cents == 10_000 + 82  # 10000 * 10% * 30/365 = 82.19 cents
+    assert sp.balance_cents == 10_000 + 77  # paid on days 7, 14, 21 and 28 (19+19+19+20); days 29-30 are still accruing
+    assert sp.interest_paid_on == D0 + timedelta(days=28)
     ledger.ensure_up_to_date(s, sp, D0 + timedelta(days=30))
-    assert sp.balance_cents == 10_082  # catching up twice books once
-    assert s.exec(select(Transaction).where(Transaction.type == "zins")).all().__len__() == 1
+    assert sp.balance_cents == 10_077  # catching up twice books once
+    days = [tx.timestamp.date() for tx in s.exec(select(Transaction).where(Transaction.type == "zins").order_by(Transaction.id))]
+    assert days == [D0 + timedelta(days=d) for d in (7, 14, 21, 28)]  # dated when they fell due, not when somebody looked
+
+
+def test_visit_pattern_does_not_change_the_result(s):
+    def run(name, visits):
+        kid = ledger.create_user(s, name, "child", "1111", today=D0, giro_rate_bp=1000)
+        sp = giro(s, kid)
+        sp.balance_cents = 10_000
+        s.add(RecurringRule(from_account_id=None, to_account_id=sp.id, amount_cents=500, interval="weekly", next_run=D0 + timedelta(days=3)))
+        s.flush()
+        for d in visits:
+            ledger.ensure_up_to_date(s, sp, D0 + timedelta(days=d))
+        return sp.balance_cents
+
+    assert run("Daily", range(1, 61)) == run("Once", [60]) == run("Rare", [17, 60])
 
 
 def test_monthly_and_yearly_payout_periods(s):
@@ -135,10 +151,11 @@ def test_recurring_allowance_catches_up_once(s, kids):
     s.add(RecurringRule(from_account_id=None, to_account_id=g.id, amount_cents=500, interval="weekly",
                         next_run=D0 + timedelta(days=7)))
     s.flush()
+    paid = lambda: [tx.amount_cents for tx in s.exec(select(Transaction).where(Transaction.type == "dauerauftrag"))]  # noqa: E731
     ledger.ensure_up_to_date(s, g, D0 + timedelta(days=21))
-    assert g.balance_cents == 1500
+    assert paid() == [500, 500, 500]
     ledger.ensure_up_to_date(s, g, D0 + timedelta(days=21))
-    assert g.balance_cents == 1500
+    assert paid() == [500, 500, 500]
 
 
 def test_monthly_rule_clamps_to_month_end():
@@ -224,7 +241,7 @@ def test_celebrations_show_once(s, kids):
     sp = giro(s, mia)
     sp.balance_cents = 10_000
     ledger.ensure_up_to_date(s, sp, D0 + timedelta(days=30))
-    assert [t.type for t in ledger.unseen_events(s, mia.id)] == ["zins"]
+    assert [t.type for t in ledger.unseen_events(s, mia.id)] == ["zins"] * 4  # the app shows them as one celebration
     ledger.mark_seen(s, mia.id, D0)
     assert ledger.unseen_events(s, mia.id) == []
 
