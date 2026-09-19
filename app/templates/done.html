@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+{% include "_confetti.html" %}
+<div class="pop card space-y-4 text-center">
+  <div class="text-7xl">{{ emoji }}</div>
+  <p class="text-3xl font-extrabold">{{ msg }}</p>
+  <p class="lesson">{{ lesson }}</p>
+</div>
+<a href="/home" class="btn w-full">🏠 {{ t('app.ok') }}</a>
+{% endblock %}

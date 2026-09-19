@@ -1,0 +1,162 @@
+"""All user-facing text lives here. Add a locale by adding a dict to STRINGS; call sites never change."""
+
+from datetime import date
+
+LOCALE = "de"
+
+STRINGS = {
+    "de": {
+        "app.title": "Kinderbank",
+        "app.logout": "Tschüss",
+        "app.back": "Zurück",
+        "app.ok": "Toll!",
+        "app.next": "Weiter",
+        "app.save": "Speichern",
+        "app.confirm.yes": "Ja, schicken!",
+
+        # login
+        "login.who": "Wer bist du?",
+        "login.pin": "Dein Geheim-Code",
+        "login.pin.wrong": "Oh nein, das war nicht dein Code. Versuch es noch einmal!",
+        "login.parent": "Eltern",
+        "setup.title": "Willkommen bei der Kinderbank!",
+        "setup.intro": "Lege zuerst das Eltern-Konto an.",
+        "setup.name": "Name",
+        "setup.pin": "Eltern-Code (4 Zahlen)",
+
+        # home
+        "home.hello": "Hallo {name}!",
+        "acct.giro": "Mein Konto",
+        "acct.giro.sub": "Girokonto",
+        "acct.festgeld": "Schatztruhe",
+        "acct.festgeld.sub": "Festgeld",
+        "home.transfer": "Überweisen",
+        "home.statement": "Kontoauszug",
+        "home.rate": "{rate} Zinsen im Jahr: {cents} für jeden Euro",
+        "home.no_balance": "Noch nichts drin",
+
+        # celebrations
+        "cel.zins": "Du hast {amount} Zinsen bekommen!",
+        "cel.zins.why": "Die Bank bezahlt dich dafür, dass dein Geld bei ihr bleibt. Das nennt man Zinsen.",
+        "cel.dauerauftrag": "Taschengeld ist da! {amount}",
+        "cel.dauerauftrag.why": "Dein Taschengeld kommt regelmäßig von allein. Das nennt man Dauerauftrag.",
+
+        # statement
+        "stmt.title": "Kontoauszug",
+        "stmt.empty": "Hier ist noch nichts passiert.",
+        "stmt.balance": "Kontostand",
+        "tx.zins": "Zinsen",
+        "tx.dauerauftrag": "Taschengeld (Dauerauftrag)",
+        "tx.festgeld.in": "Aus der Schatztruhe",
+        "tx.festgeld.out": "In die Schatztruhe",
+        "tx.transfer.in": "Überweisung von {name}",
+        "tx.transfer.out": "Überweisung an {name}",
+        "tx.parent.in": "Eltern haben Geld eingezahlt",
+        "tx.parent.out": "Eltern haben Geld abgehoben",
+        "tx.aktienkauf": "Aktie gekauft",
+        "tx.aktienverkauf": "Aktie verkauft",
+
+        # transfer
+        "xfer.title": "Überweisen",
+        "xfer.from": "Von wo?",
+        "xfer.to": "An wen?",
+        "xfer.amount": "Wie viel?",
+        "xfer.reset": "Auf null",
+        "xfer.confirm": "Wirklich {amount} an {name} schicken?",
+        "xfer.before_after": "Vorher {before} · Nachher {after}",
+        "xfer.lesson": "Bei einer Überweisung geht das Geld von deinem Konto auf das Konto von jemand anderem.",
+        "xfer.done": "Geschafft! Das Geld ist angekommen.",
+
+        # festgeld
+        "fg.title": "Schatztruhe",
+        "fg.lesson": "Wenn du dein Geld länger warten lässt, bekommst du mehr Zinsen. Dafür kommst du erst später wieder dran. Das nennt man Festgeld.",
+        "fg.open": "Neue Schatztruhe",
+        "fg.term": "Wie lange warten?",
+        "fg.days": "{n} Tage",
+        "fg.days.1": "1 Tag",
+        "fg.no_products": "Im Moment gibt es keine Schatztruhen-Angebote.",
+        "fg.preview": "Wenn du wartest, bekommst du {total}.",
+        "fg.preview.empty": "Wähle einen Betrag und wie lange du wartest.",
+        "fg.start": "Zumachen und warten",
+        "fg.locked": "Noch {n} Tage",
+        "fg.locked.1": "Noch 1 Tag",
+        "fg.locked.lesson": "Die Truhe bleibt zu, bis die Zeit um ist.",
+        "fg.ready": "Fertig! Deine Schatztruhe ist offen.",
+        "fg.ready.lesson": "Du hast gewartet, und dafür bekommst du {interest} extra.",
+        "fg.collect": "Abholen!",
+        "fg.collected": "Du hast {total} abgeholt!",
+        "fg.collected.lesson": "Das Geld ist jetzt wieder auf deinem Konto.",
+        "fg.none": "Du hast noch keine Schatztruhe.",
+
+        "offline.msg": "Du bist gerade nicht mit dem Internet verbunden.",
+        "offline.hint": "Sobald du wieder verbunden bist, geht es weiter.",
+
+        # errors
+        "err.insufficient": "Du hast nicht genug Geld dafür.",
+        "err.amount": "Das geht so nicht. Wähle einen Betrag.",
+        "err.same_account": "Wähle ein anderes Konto.",
+        "err.festgeld_locked": "Die Schatztruhe ist noch zu. Du musst noch warten.",
+        "err.already_collected": "Die Schatztruhe ist schon leer.",
+        "err.term": "Diese Wartezeit gibt es nicht.",
+        "err.no_shares": "Du hast nicht so viele Aktien.",
+        "err.module_off": "Das ist für dich noch nicht freigeschaltet.",
+        "err.forbidden": "Das darfst du nicht.",
+        "err.pin_format": "Der Code muss aus 4 Zahlen bestehen.",
+        "err.rate": "Der Zinssatz muss zwischen 0 und 100 Prozent liegen.",
+        "err.name": "Bitte gib einen Namen ein.",
+
+        # parents
+        "par.title": "Eltern-Bereich",
+        "par.kids": "Kinder",
+        "par.module.festgeld": "Schatztruhe (Festgeld)",
+        "par.module.stocks": "Aktien",
+        "par.add_kid": "Kind hinzufügen",
+        "par.name": "Name",
+        "par.avatar": "Bild",
+        "par.pin": "Code (4 Zahlen)",
+        "par.rate": "Zinsen pro Jahr (%)",
+        "par.rate.save": "Zinsen ändern",
+        "par.products": "Schatztruhen-Angebote (Festgeld)",
+        "par.product.name": "Name",
+        "par.product.days": "Tage",
+        "par.product.rate": "Zinsen pro Jahr (%)",
+        "par.product.active": "Aktiv",
+        "par.product.add": "Angebot hinzufügen",
+        "par.product.hint": "Änderungen gelten nur für neue Schatztruhen. Bestehende behalten ihre Zinsen.",
+        "par.book": "Geld buchen",
+        "par.book.hint": "Positiv = einzahlen, negativ = abheben. Zum Beispiel Startkapital.",
+        "par.book.account": "Konto",
+        "par.book.amount": "Betrag in Euro",
+        "par.book.note": "Notiz",
+        "par.rules": "Taschengeld (Dauerauftrag)",
+        "par.rule.kid": "Kind",
+        "par.rule.amount": "Betrag in Euro",
+        "par.rule.interval": "Wie oft",
+        "par.rule.weekly": "Jede Woche",
+        "par.rule.monthly": "Jeden Monat",
+        "par.rule.start": "Erste Zahlung am",
+        "par.rule.add": "Dauerauftrag anlegen",
+        "par.rule.delete": "Löschen",
+    },
+}
+
+
+def t(key: str, **kw) -> str:
+    text = STRINGS[LOCALE].get(key, key)
+    return text.format(**kw) if kw else text
+
+
+def format_money(cents: int) -> str:
+    euros, rest = divmod(abs(cents), 100)
+    sign = "-" if cents < 0 else ""
+    return f"{sign}{euros:,}".replace(",", ".") + f",{rest:02d} €"
+
+
+def format_percent(bp: int, unit: str = "") -> str:
+    """Basis points -> '2,5' (German decimal comma), optionally followed by a unit."""
+    text = f"{bp / 100:g}".replace(".", ",")
+    return f"{text} {unit}".strip()
+
+
+def format_date(d: date) -> str:
+    return d.strftime("%d.%m.%Y")

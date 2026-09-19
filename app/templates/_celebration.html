@@ -1,0 +1,14 @@
+{# Shown once per unseen interest / allowance booking; "Toll!" marks them seen. #}
+<div class="fixed inset-0 z-50 overflow-y-auto bg-pink-400 p-6">
+  {% include "_confetti.html" %}
+  <div class="mx-auto flex min-h-full max-w-xl flex-col items-center justify-center gap-6 text-center">
+    {% for e in events %}
+    <div class="pop card w-full space-y-3">
+      <div class="text-7xl">{{ '✨' if e.type == 'zins' else '🎉' }}</div>
+      <p class="text-3xl font-extrabold">{{ t('cel.' ~ e.type, amount=e.cents|money) }}</p>
+      <p class="lesson">{{ t('cel.' ~ e.type ~ '.why') }}</p>
+    </div>
+    {% endfor %}
+    <form method="post" action="/gesehen"><button class="btn bg-white text-pink-600">🎈 {{ t('app.ok') }}</button></form>
+  </div>
+</div>

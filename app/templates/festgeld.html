@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% from "_stepper.html" import stepper %}
+{% block content %}
+<h1 class="text-3xl font-extrabold">🧰 {{ t('fg.title') }} <span class="text-base font-normal text-slate-500">{{ t('acct.festgeld.sub') }}</span></h1>
+<p class="lesson">{{ t('fg.lesson') }}</p>
+{% if error %}<p class="error">{{ t(error) }}</p>{% endif %}
+
+{% for r in rows %}
+<div class="card space-y-3 text-center">
+  <p class="text-base text-slate-500">{{ r.acc.name }} · {{ r.acc.interest_rate_bp|pct }} %</p>
+  {% if r.status == 'ready' %}
+  <div class="pop text-7xl">🎁</div>
+  <p class="text-2xl font-extrabold">{{ t('fg.ready') }}</p>
+  <p class="text-5xl font-extrabold">{{ r.payout[0]|money }}</p>
+  <p class="lesson">{{ t('fg.ready.lesson', interest=r.payout[1]|money) }}</p>
+  <form method="post" action="/festgeld/{{ r.acc.id }}/abholen"><button class="btn w-full">🎉 {{ t('fg.collect') }}</button></form>
+  {% else %}
+  <div class="text-7xl">🔒</div>
+  <p class="text-5xl font-extrabold">{{ r.acc.balance_cents|money }}</p>
+  <p class="text-2xl font-bold">⏳ {{ t('fg.locked.1') if r.days == 1 else t('fg.locked', n=r.days) }}</p>
+  <p class="lesson">{{ t('fg.locked.lesson') }} {{ t('fg.preview', total=r.payout[0]|money) }}</p>
+  {% endif %}
+</div>
+{% else %}
+<p class="lesson">{{ t('fg.none') }}</p>
+{% endfor %}
+
+{% if user.festgeld_enabled %}
+<h2 class="text-2xl font-extrabold">{{ t('fg.open') }}</h2>
+<form method="post" action="/festgeld/oeffnen" class="space-y-6"
+      hx-get="/festgeld/vorschau" hx-trigger="change" hx-target="#preview">
+  {{ stepper() }}
+  <section class="space-y-3">
+    <h3 class="font-bold">{{ t('fg.term') }}</h3>
+    <div class="grid grid-cols-3 gap-3">
+      {% for p in products %}
+      <label class="tile choice">
+        <input type="radio" name="product_id" value="{{ p.id }}" class="sr-only" required>
+        <span class="text-4xl">🗓️</span>{{ p.name }}
+        <span class="text-base font-normal">{{ t('fg.days.1') if p.term_days == 1 else t('fg.days', n=p.term_days) }}</span>
+        <span class="text-base font-normal">{{ p.rate_bp|pct }} %</span>
+      </label>
+      {% else %}
+      <p class="lesson col-span-3">{{ t('fg.no_products') }}</p>
+      {% endfor %}
+    </div>
+  </section>
+  <div id="preview">{% with total = None %}{% include "_preview.html" %}{% endwith %}</div>
+  <button class="btn w-full">🔒 {{ t('fg.start') }}</button>
+</form>
+{% endif %}
+<a href="/home" class="btn btn-alt">↩️ {{ t('app.back') }}</a>
+{% endblock %}

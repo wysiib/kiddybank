@@ -1,0 +1,26 @@
+@import "tailwindcss";
+@source "./templates";
+
+@layer components {
+  .btn { @apply inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-pink-500 px-6 py-3 text-xl font-bold text-white shadow transition active:scale-95; }
+  .btn-alt { @apply border-2 border-slate-200 bg-white text-slate-700; }
+  .tile { @apply flex min-h-32 flex-col items-center justify-center gap-2 rounded-3xl bg-white p-4 text-center text-xl font-bold shadow transition active:scale-95; }
+  .choice { @apply cursor-pointer has-checked:ring-4 has-checked:ring-pink-400; }
+  .card { @apply rounded-3xl bg-white p-5 shadow; }
+  .lesson { @apply rounded-2xl bg-sky-100 p-4 text-lg text-sky-900; }
+  .error { @apply rounded-2xl bg-red-100 p-4 font-bold text-red-800; }
+  .input { @apply min-h-14 w-full rounded-2xl border-2 border-slate-200 bg-white px-4 text-xl; }
+}
+
+/* Visual feedback only: this app never plays sound. */
+@keyframes fall { to { transform: translateY(115vh) rotate(360deg); } }
+@keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-12px); } 75% { transform: translateX(12px); } }
+@keyframes pop { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+.fall { position: fixed; top: -3rem; font-size: 2.5rem; animation: fall 3.5s linear infinite; pointer-events: none; }
+.shake { animation: shake 0.4s; }
+.pop { animation: pop 0.4s ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .fall, .shake, .pop { animation: none; }
+}

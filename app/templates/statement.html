@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="text-3xl font-extrabold">{{ t('stmt.title') }}: {{ acc.name or t('acct.' ~ acc.type) }}</h1>
+<div class="card">
+  <div class="text-base text-slate-500">{{ t('stmt.balance') }}</div>
+  <div class="text-5xl font-extrabold">{{ acc.balance_cents|money }}</div>
+</div>
+{% for r in rows %}
+<div class="card flex items-center gap-4">
+  <span class="text-4xl">{{ r.emoji }}</span>
+  <div class="flex-1">
+    <div class="font-bold">{{ r.text }}</div>
+    <div class="text-base text-slate-500">{{ r.tx.timestamp.date()|date }} · {{ r.balance|money }}</div>
+  </div>
+  <div class="text-2xl font-extrabold {{ 'text-green-600' if r.delta > 0 else 'text-red-600' }}">
+    {{ '+' if r.delta > 0 }}{{ r.delta|money }}
+  </div>
+</div>
+{% else %}
+<p class="lesson">{{ t('stmt.empty') }}</p>
+{% endfor %}
+<a href="/home" class="btn btn-alt">↩️ {{ t('app.back') }}</a>
+{% endblock %}

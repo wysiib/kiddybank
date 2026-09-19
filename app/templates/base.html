@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="{{ locale }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ec4899">
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <link rel="icon" href="/static/icon-192.png">
+  <link rel="apple-touch-icon" href="/static/icon-192.png">
+  <title>{{ t('app.title') }}</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/htmx.min.js" defer></script>
+  <script src="/static/app.js" defer></script>
+</head>
+<body class="min-h-screen bg-amber-50 text-xl text-slate-800">
+  {% if user is defined and user %}
+  <header class="flex items-center justify-between p-4">
+    <a href="/" class="text-4xl" aria-label="{{ t('app.title') }}">🏠</a>
+    <form method="post" action="/logout">
+      <button class="btn btn-alt">👋 {{ t('app.logout') }}</button>
+    </form>
+  </header>
+  {% endif %}
+  <main class="mx-auto max-w-2xl space-y-6 p-4">
+    {% block content %}{% endblock %}
+  </main>
+  <script>
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");
+  </script>
+</body>
+</html>

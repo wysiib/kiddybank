@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card space-y-4 text-center">
+  <div class="text-7xl">💸</div>
+  <p class="text-3xl font-extrabold">{{ t('xfer.confirm', amount=cents|money, name=to_name) }}</p>
+  <p class="lesson">{{ t('xfer.before_after', before=src.balance_cents|money, after=(src.balance_cents - cents)|money) }}</p>
+  <p class="lesson">{{ t('xfer.lesson') }}</p>
+</div>
+<form method="post" action="/ueberweisen" class="grid grid-cols-2 gap-4">
+  <input type="hidden" name="to_id" value="{{ dst.id }}">
+  <input type="hidden" name="cents" value="{{ cents }}">
+  <a href="/ueberweisen" class="btn btn-alt">↩️ {{ t('app.back') }}</a>
+  <button class="btn">✅ {{ t('app.confirm.yes') }}</button>
+</form>
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="text-center">
+  <div class="text-7xl">{{ who.avatar }}</div>
+  <h1 class="text-3xl font-extrabold">{{ who.name }}</h1>
+  <p>{{ t('login.pin') }}</p>
+</div>
+{% if error %}<p class="error text-center">{{ t(error) }}</p>{% endif %}
+<form method="post" action="/login/{{ who.id }}" class="space-y-6">
+  <input type="hidden" name="pin" value="">
+  <div class="flex justify-center gap-4 {{ 'shake' if error }}">
+    {% for _ in range(4) %}<span data-dot class="h-8 w-8 rounded-full border-4 border-pink-500"></span>{% endfor %}
+  </div>
+  <div class="mx-auto grid max-w-xs grid-cols-3 gap-3">
+    {% for k in [1,2,3,4,5,6,7,8,9] %}
+    <button type="button" data-key="{{ k }}" class="tile min-h-20 text-3xl">{{ k }}</button>
+    {% endfor %}
+    <a href="/login" class="tile min-h-20 text-3xl" aria-label="{{ t('app.back') }}">↩️</a>
+    <button type="button" data-key="0" class="tile min-h-20 text-3xl">0</button>
+    <button type="button" data-key="back" class="tile min-h-20 text-3xl" aria-label="⌫">⌫</button>
+  </div>
+</form>
+{% endblock %}

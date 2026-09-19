@@ -1,0 +1,12 @@
+{% macro stepper(name="cents") %}
+<div class="card space-y-4 text-center" data-stepper>
+  <div class="text-5xl font-extrabold" data-display>{{ 0|money }}</div>
+  <input type="hidden" name="{{ name }}" value="0" data-value>
+  <div class="grid grid-cols-3 gap-2">
+    {% for n in [50, 100, 500, 1000, 2000] %}
+    <button type="button" class="btn btn-alt" data-add="{{ n }}">+{{ n|money }}</button>
+    {% endfor %}
+    <button type="button" class="btn btn-alt" data-reset>↺ {{ t('xfer.reset') }}</button>
+  </div>
+</div>
+{% endmacro %}

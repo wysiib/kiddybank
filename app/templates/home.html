@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+{% if events %}{% include "_celebration.html" %}{% endif %}
+<h1 class="text-4xl font-extrabold">{{ user.avatar }} {{ t('home.hello', name=user.name) }}</h1>
+
+{% set r = rate(giro) %}
+<a href="/konto/{{ giro.id }}" class="card block space-y-2">
+  <div class="flex items-baseline justify-between">
+    <span class="font-bold">👛 {{ t('acct.giro') }}</span>
+    <span class="text-base text-slate-500">{{ t('acct.giro.sub') }}</span>
+  </div>
+  <div class="text-5xl font-extrabold">{{ giro.balance_cents|money }}</div>
+  <p class="lesson">{{ t('home.rate', rate=r.rate, cents=r.cents) }}</p>
+</a>
+
+<div class="grid grid-cols-2 gap-4">
+  <a href="/ueberweisen" class="tile"><span class="text-6xl">💸</span>{{ t('home.transfer') }}</a>
+  {% if festgeld_visible %}
+  <a href="/festgeld" class="tile"><span class="text-6xl">🧰</span>{{ t('acct.festgeld') }}{% if deposits %} ({{ deposits|length }}){% endif %}</a>
+  {% endif %}
+</div>
+{% endblock %}

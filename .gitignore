@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.db
+*.db-*
+.pytest_cache/
+bin/
+.session_secret

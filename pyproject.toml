@@ -1,0 +1,23 @@
+[project]
+name = "kiddybank"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "sqlmodel",
+    "jinja2",
+    "uvicorn",
+    "itsdangerous",
+    "python-multipart",
+]
+
+[dependency-groups]
+dev = ["pytest", "httpx"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"

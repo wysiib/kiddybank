@@ -1,0 +1,4 @@
+{# falling coins, CSS only #}
+{% for i in range(14) %}
+<span class="fall" aria-hidden="true" style="left: {{ 3 + i * 7 }}%; animation-delay: {{ (i % 5) * 0.5 }}s">🪙</span>
+{% endfor %}
