@@ -163,7 +163,8 @@ def test_festgeld_lock_collect_and_payout(s, kids, kurz):
     total, interest = ledger.festgeld_payout(fg)
     assert interest == 12  # 5000 * 12% * 7/365 = 11.51 cents, rounded to the nearest cent
     assert ledger.collect_festgeld(s, fg, maturity) == total == 5_012
-    assert giro(s, mia).balance_cents == 5_000 + 5_012 and fg.balance_cents == 0
+    # the Giro is settled before the payout lands: its 50 EUR earned 9.59 -> 10 cents of its own over the week
+    assert giro(s, mia).balance_cents == 5_000 + 10 + 5_012 and fg.balance_cents == 0
     assert ledger.festgeld_status(fg, maturity) == "collected"
 
     with pytest.raises(LedgerError, match="err.already_collected"):
@@ -224,7 +225,7 @@ def test_celebrations_show_once(s, kids):
     sp.balance_cents = 10_000
     ledger.ensure_up_to_date(s, sp, D0 + timedelta(days=30))
     assert [t.type for t in ledger.unseen_events(s, mia.id)] == ["zins"]
-    ledger.mark_seen(s, mia.id)
+    ledger.mark_seen(s, mia.id, D0)
     assert ledger.unseen_events(s, mia.id) == []
 
 
@@ -277,7 +278,7 @@ JPEG = b"\xff\xd8\xff\xe0" + b"x" * 100
 
 def make_goal(s, user, **kw):
     args = {"name": "Lego", "emoji": "🧸", "target_cents": 500, "photo": None, **kw}
-    return ledger.create_goal(s, user.id, **args)
+    return ledger.create_goal(s, user.id, today=D0, **args)
 
 
 def test_goal_validation_and_photo_roundtrip(s, kids):
@@ -304,7 +305,7 @@ def test_goal_limit_counts_only_active_goals(s, kids):
     make_goal(s, tom)  # limit is per kid
 
     fund(s, giro(s, mia), 500)
-    ledger.finish_goal(goals[0], giro(s, mia))
+    ledger.finish_goal(goals[0], giro(s, mia), D0)
     make_goal(s, mia)  # a finished goal frees a slot
 
 
@@ -317,17 +318,17 @@ def test_goal_progress_reached_and_finish(s, kids):
     assert ledger.goal_progress(g, giro(s, mia)) == 50
     assert not ledger.goal_reached(g, giro(s, mia))
     with pytest.raises(LedgerError, match="err.goal_not_reached"):
-        ledger.finish_goal(g, giro(s, mia))
+        ledger.finish_goal(g, giro(s, mia), D0)
 
     fund(s, giro(s, mia), 300)  # 550 of 500
     assert ledger.goal_progress(g, giro(s, mia)) == 100  # capped
     assert ledger.goal_reached(g, giro(s, mia))
     assert ledger.unseen_reached_goals(s, mia.id) == [g]
 
-    ledger.mark_seen(s, mia.id)
+    ledger.mark_seen(s, mia.id, D0)
     assert ledger.unseen_reached_goals(s, mia.id) == []  # celebrated once
 
-    ledger.finish_goal(g, giro(s, mia))
+    ledger.finish_goal(g, giro(s, mia), D0)
     assert g.done_at and not ledger.goal_reached(g, giro(s, mia))
     assert ledger.goal_progress(g, giro(s, mia)) == 100
 
@@ -345,13 +346,13 @@ def test_week_summary_buckets_and_window(s, kids, kurz):
     mia, tom = kids
     sp = giro(s, mia)
     at = lambda days: datetime.combine(D0 - timedelta(days=days), time(9))  # noqa: E731
-    ledger.post(s, None, sp, 500, "dauerauftrag", now=at(0))
-    ledger.post(s, None, sp, 300, "dauerauftrag", now=at(6))  # oldest day still inside
-    ledger.post(s, None, sp, 900, "dauerauftrag", now=at(7))  # too old
-    ledger.post(s, None, sp, 40, "zins", now=at(1))
-    ledger.post(s, None, sp, 700, "manual", now=at(2))  # parent deposit
-    ledger.post(s, sp, None, 250, "manual", now=at(3))  # parent withdrawal
-    ledger.post(s, sp, giro(s, tom), 150, "manual", now=at(3))  # gift to Tom
+    ledger.post(s, None, sp, 500, "dauerauftrag", D0, now=at(0))
+    ledger.post(s, None, sp, 300, "dauerauftrag", D0, now=at(6))  # oldest day still inside
+    ledger.post(s, None, sp, 900, "dauerauftrag", D0, now=at(7))  # too old
+    ledger.post(s, None, sp, 40, "zins", D0, now=at(1))
+    ledger.post(s, None, sp, 700, "manual", D0, now=at(2))  # parent deposit
+    ledger.post(s, sp, None, 250, "manual", D0, now=at(3))  # parent withdrawal
+    ledger.post(s, sp, giro(s, tom), 150, "manual", D0, now=at(3))  # gift to Tom
     fg = ledger.open_festgeld(s, sp, 200, kurz, D0)  # saving is neither income nor spending
     assert ledger.week_summary(s, sp, D0) == {"dauerauftrag": 800, "zins": 40, "other": 700, "spent": 400}
     assert ledger.week_summary(s, giro(s, tom), D0) == {"dauerauftrag": 0, "zins": 0, "other": 150, "spent": 0}

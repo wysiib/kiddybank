@@ -79,16 +79,30 @@ def _check_debit(acc: Account, cents: int) -> None:
         raise LedgerError("err.insufficient")
 
 
-def post(s: Session, from_acc: Account | None, to_acc: Account | None, cents: int, type: str,
-         note: str = "", now: datetime | None = None, seen: bool = False) -> Transaction:
-    """Low level: one atomic booking. A None side is the virtual parent/bank/market."""
+def stamp(today: date) -> datetime:
+    """Timestamp for "now" on the injected day. Everything time-stamped goes through here, so tests can move the clock."""
+    return datetime.combine(today, datetime.now().time())
+
+
+def post(s: Session, from_acc: Account | None, to_acc: Account | None, cents: int, type: str, today: date,
+         note: str = "", seen: bool = False, now: datetime | None = None) -> Transaction:
+    """Every booking. Settles interest and due allowances on both sides first, so the invariant
+    'up to date before any balance change' cannot be forgotten. A None side is the virtual parent/bank/market."""
+    for acc in (from_acc, to_acc):
+        if acc is not None:
+            ensure_up_to_date(s, acc, today)
+    return _post(s, from_acc, to_acc, cents, type, now or stamp(today), note, seen)
+
+
+def _post(s: Session, from_acc: Account | None, to_acc: Account | None, cents: int, type: str, now: datetime,
+          note: str = "", seen: bool = False) -> Transaction:
+    """The booking itself, without settling. Used by the settling code (interest, allowance) so it cannot recurse."""
     check_amount(cents)
     if from_acc is not None:
         _check_debit(from_acc, cents)
         from_acc.balance_cents -= cents
     if to_acc is not None:
         to_acc.balance_cents += cents
-    now = now or datetime.now()
     t = Transaction(from_account_id=from_acc and from_acc.id, to_account_id=to_acc and to_acc.id,
                     amount_cents=cents, type=type, timestamp=now, note=note, seen_at=now if seen else None)
     s.add(t)
@@ -96,22 +110,19 @@ def post(s: Session, from_acc: Account | None, to_acc: Account | None, cents: in
     return t
 
 
-def transfer(s: Session, from_acc: Account, to_acc: Account, cents: int, today: date, note: str = "") -> Transaction:
+def transfer(s: Session, from_acc: Account, to_acc: Account, cents: int, today: date) -> Transaction:
     if from_acc.id == to_acc.id:
         raise LedgerError("err.same_account")
     if "festgeld" in (from_acc.type, to_acc.type):
         raise LedgerError("err.festgeld_locked")
-    ensure_up_to_date(s, from_acc, today)
-    ensure_up_to_date(s, to_acc, today)
-    return post(s, from_acc, to_acc, cents, "manual", note)
+    return post(s, from_acc, to_acc, cents, "manual", today)
 
 
 def manual_booking(s: Session, acc: Account, cents: int, today: date, note: str = "") -> Transaction:
     """Parent booking: positive = deposit, negative = withdrawal."""
-    ensure_up_to_date(s, acc, today)
     if cents >= 0:
-        return post(s, None, acc, cents, "manual", note)
-    return post(s, acc, None, -cents, "manual", note)
+        return post(s, None, acc, cents, "manual", today, note)
+    return post(s, acc, None, -cents, "manual", today, note)
 
 
 # --- lazy catch-up -----------------------------------------------------------------------------
@@ -146,7 +157,7 @@ def accrue_interest(s: Session, acc: Account, today: date) -> None:
         acc.interest_accrued -= cents * INTEREST_DENOM  # carry may be slightly negative after rounding up
         acc.interest_paid_on = today
         if cents:
-            post(s, None, acc, cents, "zins", now=datetime.combine(today, time(0)))
+            _post(s, None, acc, cents, "zins", datetime.combine(today, time(0)))
 
 
 def next_interest(acc: Account, today: date) -> tuple[int, int]:
@@ -180,7 +191,7 @@ def run_recurring(s: Session, acc: Account, today: date) -> None:
         src = s.get(Account, r.from_account_id) if r.from_account_id else None
         while r.next_run <= today:
             try:
-                post(s, src, acc, r.amount_cents, "dauerauftrag", now=datetime.combine(r.next_run, time(8)))
+                _post(s, src, acc, r.amount_cents, "dauerauftrag", datetime.combine(r.next_run, time(8)))
             except LedgerError:
                 pass  # ponytail: payer lacks funds, that occurrence is skipped
             r.next_run = _next_run(r.next_run, r.interval)
@@ -218,7 +229,7 @@ def open_festgeld(s: Session, giro: Account, cents: int, product: FestgeldProduc
                  maturity_date=today + timedelta(days=product.term_days))
     s.add(fg)
     s.flush()
-    post(s, giro, fg, cents, "festgeld")
+    post(s, giro, fg, cents, "festgeld", today)
     return fg
 
 
@@ -245,9 +256,9 @@ def collect_festgeld(s: Session, fg: Account, today: date) -> int:
     total, interest = festgeld_payout(fg)
     giro = get_account(s, fg.user_id, "giro")
     if interest:
-        post(s, None, fg, interest, "zins", seen=True)  # the kid is looking at it right now
-    post(s, fg, giro, total, "festgeld", seen=True)
-    fg.collected_at = datetime.now()
+        post(s, None, fg, interest, "zins", today, seen=True)  # the kid is looking at it right now
+    post(s, fg, giro, total, "festgeld", today, seen=True)
+    fg.collected_at = stamp(today)
     return total
 
 
@@ -260,8 +271,8 @@ def unseen_events(s: Session, user_id: int) -> list[Transaction]:
         Transaction.seen_at.is_(None)).order_by(Transaction.timestamp)).all())
 
 
-def mark_seen(s: Session, user_id: int) -> None:
-    now = datetime.now()
+def mark_seen(s: Session, user_id: int, today: date) -> None:
+    now = stamp(today)
     for t in unseen_events(s, user_id):
         t.seen_at = now
     for g in unseen_reached_goals(s, user_id):
@@ -284,7 +295,7 @@ def statement(s: Session, acc: Account, limit: int = 50) -> list[tuple[Transacti
 def week_summary(s: Session, giro: Account, today: date) -> dict[str, int]:
     """Cents in / out of the Giro over the last 7 days (today + 6), for the home card.
     Festgeld moves are saving, not income or spending, so they are left out."""
-    since = datetime.combine(today - timedelta(days=6), time(0))  # no upper bound: post() stamps real time, never the future
+    since = datetime.combine(today - timedelta(days=6), time(0))  # no upper bound: nothing is stamped after today
     out = {"dauerauftrag": 0, "zins": 0, "other": 0, "spent": 0}
     for tx in s.exec(select(Transaction).where(
             (Transaction.from_account_id == giro.id) | (Transaction.to_account_id == giro.id),
@@ -318,7 +329,8 @@ def goal_reached(goal: Goal, giro: Account) -> bool:
     return goal.done_at is None and giro.balance_cents >= goal.target_cents
 
 
-def create_goal(s: Session, user_id: int, name: str, emoji: str, target_cents: int, photo: bytes | None) -> Goal:
+def create_goal(s: Session, user_id: int, name: str, emoji: str, target_cents: int, photo: bytes | None,
+                today: date) -> Goal:
     name = name.strip()[:40]
     check_amount(target_cents)
     if photo is not None:
@@ -331,7 +343,7 @@ def create_goal(s: Session, user_id: int, name: str, emoji: str, target_cents: i
         raise LedgerError("err.goal_empty")
     if sum(1 for g in list_goals(s, user_id) if g.done_at is None) >= MAX_ACTIVE_GOALS:
         raise LedgerError("err.goal_limit")
-    now = datetime.now()
+    now = stamp(today)
     goal = Goal(user_id=user_id, name=name, emoji=emoji, target_cents=target_cents, photo=photo, created_at=now)
     if goal_reached(goal, get_account(s, user_id, "giro")):
         goal.reached_seen_at = now  # already affordable at creation: no fake celebration
@@ -340,10 +352,10 @@ def create_goal(s: Session, user_id: int, name: str, emoji: str, target_cents: i
     return goal
 
 
-def finish_goal(goal: Goal, giro: Account) -> None:
+def finish_goal(goal: Goal, giro: Account, today: date) -> None:
     if not goal_reached(goal, giro):
         raise LedgerError("err.goal_not_reached")
-    goal.done_at = datetime.now()
+    goal.done_at = stamp(today)
 
 
 def unseen_reached_goals(s: Session, user_id: int) -> list[Goal]:

@@ -251,8 +251,8 @@ def home(request: Request, user: User = Depends(kid), s: Session = Depends(get_s
 
 
 @app.post("/gesehen")
-def seen(user: User = Depends(kid), s: Session = Depends(get_session)):
-    ledger.mark_seen(s, user.id)
+def seen(user: User = Depends(kid), s: Session = Depends(get_session), today: date = Depends(get_today)):
+    ledger.mark_seen(s, user.id, today)
     return redirect("/home")
 
 
@@ -485,10 +485,11 @@ def goals_page(request: Request, user: User = Depends(kid), s: Session = Depends
 
 @app.post("/ziele")
 def goal_create(request: Request, name: str = Form(""), emoji: str = Form(""), cents: int = Form(0),
-                photo: UploadFile | None = File(None), user: User = Depends(kid), s: Session = Depends(get_session)):
+                photo: UploadFile | None = File(None), user: User = Depends(kid), s: Session = Depends(get_session),
+                today: date = Depends(get_today)):
     data = photo.file.read(ledger.MAX_PHOTO_BYTES + 1) if photo else b""  # bounded read, size is checked in the ledger
     try:
-        ledger.create_goal(s, user.id, name, emoji if emoji in GOAL_EMOJIS else GOAL_EMOJIS[0], cents, data or None)
+        ledger.create_goal(s, user.id, name, emoji if emoji in GOAL_EMOJIS else GOAL_EMOJIS[0], cents, data or None, today)
     except LedgerError as e:
         s.rollback()
         return _goals_page(request, s, user, e.args[0])
@@ -505,10 +506,11 @@ def goal_delete(goal_id: int, user: User = Depends(kid), s: Session = Depends(ge
 
 
 @app.post("/ziele/{goal_id}/geschafft")
-def goal_finish(request: Request, goal_id: int, user: User = Depends(kid), s: Session = Depends(get_session)):
+def goal_finish(request: Request, goal_id: int, user: User = Depends(kid), s: Session = Depends(get_session),
+                today: date = Depends(get_today)):
     g = _own_goal(s, user, goal_id)
     try:
-        ledger.finish_goal(g, ledger.get_account(s, user.id, "giro"))
+        ledger.finish_goal(g, ledger.get_account(s, user.id, "giro"), today)
     except LedgerError as e:
         s.rollback()
         return _goals_page(request, s, user, e.args[0])

@@ -5,7 +5,7 @@ from datetime import date, timedelta
 
 from sqlmodel import Session, select
 
-from .ledger import LedgerError, ensure_up_to_date, get_account, post
+from .ledger import LedgerError, get_account, post
 from .models import Holding, PriceHistory, Stock
 
 MIN_PRICE_CENTS = 100
@@ -50,9 +50,8 @@ def buy(s: Session, user_id: int, stock_id: int, shares: int, today: date) -> No
         raise LedgerError("err.amount")
     update_prices(s, today)
     st, giro = s.get(Stock, stock_id), get_account(s, user_id, "giro")
-    ensure_up_to_date(s, giro, today)
     cost = shares * st.current_price_cents
-    post(s, giro, None, cost, "aktienkauf", note=st.symbol)
+    post(s, giro, None, cost, "aktienkauf", today, note=st.symbol)
     h = _holding(s, user_id, stock_id)
     if h:
         h.avg_buy_price_cents = (h.shares * h.avg_buy_price_cents + cost) // (h.shares + shares)
@@ -70,8 +69,7 @@ def sell(s: Session, user_id: int, stock_id: int, shares: int, today: date) -> N
         raise LedgerError("err.no_shares")
     update_prices(s, today)
     st, giro = s.get(Stock, stock_id), get_account(s, user_id, "giro")
-    ensure_up_to_date(s, giro, today)
-    post(s, None, giro, shares * st.current_price_cents, "aktienverkauf", note=st.symbol)
+    post(s, None, giro, shares * st.current_price_cents, "aktienverkauf", today, note=st.symbol)
     h.shares -= shares
     if h.shares == 0:
         s.delete(h)
