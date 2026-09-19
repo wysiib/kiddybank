@@ -27,8 +27,8 @@ Mockups (approved by the owner, all screens below): `2026-09-19-coin-visuals-moc
 One coin is worth a **unit** picked from a fixed ladder so the largest stack in a scene never exceeds
 a cap. The unit is printed once per scene ("1 Münze = 2 €").
 
-- Big coins: ladder 1, 2, 5, 10, 20, 50, 100 € (and up in the same 1-2-5 steps), cap 10 coins.
-- Small (interest) coins: ladder 5, 10, 25, 50 Cent, then 1, 2, 5 € and so on, cap 20 coins.
+- Big coins: ladder 1, 2, 5, 10, 20, 50, 100 € cap 10 coins.
+- Small (interest) coins: ladder 5, 10, 25, 50 Cent, then 1, 2, 5, 10 €, cap 20 coins.
 - A positive amount is never rounded to zero coins: it shows at least one (dashed if it is a
   not-yet amount). Round to nearest otherwise.
 - All stacks in one scene share one unit, so stacks stay comparable (the three Festgeld offers do).
@@ -43,8 +43,8 @@ Paired stacks (stays/leaves on Abheben, stays/arrives on the transfer confirm, e
 Einzahlen) come from `coins.split(total, part, unit) -> (rest, part)`, so they always add up to the coins
 of one total; each positive share keeps at least one coin when the total has two or more.
 
-Ceiling: above the top of the ladders a stack just shows the cap and the printed amount carries
-the rest. Real pocket money is nowhere near it.
+Ceiling: the ladders stop at 100 € (big) and 10 € (small); a stack is clipped at `MAX_COINS = 20` and a
+calendar row at `MAX_UNITS = 26`, and the printed amount carries the rest. Real pocket money is nowhere near it.
 
 ## Screens
 
@@ -64,12 +64,15 @@ the rest. Real pocket money is nowhere near it.
 ## Code shape
 
 - `app/coins.py` (leaf, no DB): `coin_unit(amounts, ladder, cap)`, `coins(cents, unit)` (count with the
-  min-one rule), `time_unit(days)`, `time_units(days, unit)` (float, for the smaller last calendar), `slot_fill(pct, n=10)`
+  min-one rule), `time_unit(days, cap=13)`, `time_units(days, unit)` (float, for the smaller last calendar), `slot_fill(pct, n=10)`
   -> `(full, part_pct)`, `split(total, part, unit)`. Registered as Jinja globals beside `t` and the filters in `web.py`.
-- `app/templates/_coins.html` macros: `stack(kind, n, ghost=0)`, `calendars(units)`, `slots(pct)`,
-  `unit_note(...)`. `_towers.html` goes away; `_preview.html` keeps its out-of-band swap but renders the
+- `app/templates/_coins.html` macros: `stack(kind, n, ghost=0, tone='gray', row=False, label='')`,
+  `calendars(units, label='')`, `pips(total, on, label='')`, `slots(pct, label='')` (the template macro that calls the
+  Python `slot_fill`). The unit note is plain template text built from the `coin.unit`, `coin.unit.small` and
+  `cal.unit.*` keys. `_towers.html` goes away; `_preview.html` keeps its out-of-band swap but renders the
   new stacks.
-- `festgeld.offer_towers` returns coin counts and the shared unit instead of bar heights (drop `height()`).
+- `festgeld.offer_stacks(s, giro, cents) -> (products, view)` replaces `offer_towers`: `view` holds the shared coin unit,
+  the shared calendar unit and, per offer id (`by_id`), coin counts and calendars instead of bar heights (`height()` is gone).
 - `app/tailwind.css`: component classes for coin, stack, calendar, slot, hop animation. Rebuild
   and commit `app/static/app.css`.
 - `routes/banking.py` passes the amounts the new scenes need. Routes that render `err.insufficient` add the
