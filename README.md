@@ -51,8 +51,8 @@ Stack: FastAPI, SQLModel, SQLite, server-rendered Jinja2, HTMX, Tailwind. No Jav
 
 How it fits together:
 
-- `app/main.py` routes and form handling
-- `app/ledger.py` all money logic (integer cents, basis-point rates, every booking through `post()`)
+- `app/main.py` the app; `app/routes/` routes and form handling; `app/web.py` sessions, dependencies and helpers shared by the routes
+- `app/ledger.py` accounts, interest and allowance (integer cents, basis-point rates, every booking through `post()`), with `festgeld.py`, `goals.py`, `events.py` and `market.py` built on it
 - `app/models.py` tables and engine
 - `app/i18n.py` UI strings
 - `docs/` design specs and the feature backlog
@@ -62,8 +62,8 @@ How it fits together:
 ## Things to know
 
 - Interest and pocket money are computed lazily on each request. There is no scheduler or background job.
-- There is no migration tool. Schema changes need a manual migration or a fresh database.
-- The PIN protects against siblings, not attackers. It is designed for a trusted family setting, not for real financial data.
+- There is no migration tool: columns added later are added on startup (`models.ADDED_COLUMNS`), anything else (rename, drop) needs a manual migration or a fresh database.
+- Five wrong PINs lock a profile for five minutes and parent sessions expire after 15 idle minutes. The PIN still protects against siblings, not attackers. It is designed for a trusted family setting, not for real financial data.
 - Service workers need HTTPS except on `localhost`, so serve it behind a TLS proxy if you want the PWA install on other devices.
 
 ## Contributing

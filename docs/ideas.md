@@ -4,7 +4,7 @@ Ideas from the 2026-09-19 review, not yet designed. Pick one, then brainstorm it
 Sparziele (see `docs/superpowers/specs/`). Check each against the product constraints in `CLAUDE.md`
 (kid-sized lesson sentence, no sound, no Spar account, rates parent-configurable, all text via `t()`).
 
-Done: **Sparziele** (spec and plan in `docs/superpowers/`), **Einzahlen/Abheben** (kid picks an amount, a parent confirms with their PIN).
+Done: **PIN lockout** (five wrong PINs lock a user for five minutes, login and cash desk), **Sparziele** (spec and plan in `docs/superpowers/`), **Einzahlen/Abheben** (kid picks an amount, a parent confirms with their PIN).
 
 Rejected: **Geld-Wunsch an Mama/Papa**. A real bank doesn't take wishes for money, so we don't teach that.
 
@@ -29,7 +29,6 @@ Rejected: **Geld-Wunsch an Mama/Papa**. A real bank doesn't take wishes for mone
 
 - **Backup/export.** Parent-only "Download backup" (SQLite `.backup`). Everything lives in `kiddybank.db`.
   Note: Sparziele photos are stored in the DB, so they are covered too. Does not touch the deployment milestone.
-- **PIN lockout.** Delay after 5 wrong PINs; a 4-digit PIN is brute-forceable in minutes.
 - **Undo for parent bookings.** One reversal `Transaction` instead of a manual counter-booking after a typo.
 
 ## Sparziele follow-ups (deliberately left out of v1)
@@ -40,4 +39,4 @@ Rejected: **Geld-Wunsch an Mama/Papa**. A real bank doesn't take wishes for mone
 ## Suggested order
 
 Wochen-Rückblick and the parent statement view first (most visible, existing data only), then the
-hardening pair (backup, PIN lockout).
+backup.
