@@ -12,7 +12,7 @@
   {% for k in kids %}
   <div class="card space-y-3">
     <div class="flex items-center gap-4"><span class="text-4xl">{{ k.avatar }}</span><span class="flex-1 font-bold">{{ k.name }}</span><a href="/eltern/kinder/{{ k.id }}/konto" class="btn btn-alt">📒 {{ t('stmt.title') }}</a></div>
-    <form method="post" action="/eltern/kinder/{{ k.id }}/module" class="flex flex-wrap items-center gap-4">
+    <form method="post" action="/eltern/kinder/{{ k.id }}" class="flex flex-wrap items-center gap-4">
       {% set g = giros[k.id] %}
       <div class="flex w-full gap-2">
         <label class="block flex-1">{{ t('par.rate') }}

@@ -179,7 +179,7 @@ def test_festgeld_lock_collect_and_payout(s, kids, kurz):
     assert ledger.festgeld_status(fg, maturity) == "ready"
     total, interest = ledger.festgeld_payout(fg)
     assert interest == 12  # 5000 * 12% * 7/365 = 11.51 cents, rounded to the nearest cent
-    assert ledger.collect_festgeld(s, fg, maturity) == total == 5_012
+    assert ledger.collect_festgeld(s, fg, maturity) == (total, interest) == (5_012, 12)
     # the Giro is settled before the payout lands: its 50 EUR earned 9.59 -> 10 cents of its own over the week
     assert giro(s, mia).balance_cents == 5_000 + 10 + 5_012 and fg.balance_cents == 0
     assert ledger.festgeld_status(fg, maturity) == "collected"
@@ -424,3 +424,17 @@ def test_older_db_marks_existing_photos(tmp_path):
     db.commit(); db.close()
     make_engine(f"sqlite:///{path}")
     assert sqlite3.connect(path).execute("SELECT has_photo FROM goal ORDER BY id").fetchall() == [(1,), (0,)]
+
+
+def test_rules_are_validated_and_edits_settle_the_old_schedule_first(s, kids):
+    mia, _ = kids
+    g = giro(s, mia)
+    for bad in (dict(cents=0), dict(cents=ledger.MAX_CENTS + 1), dict(interval="daily"), dict(weekday=7), dict(monthday=29)):
+        with pytest.raises(LedgerError, match="err.amount"):
+            ledger.add_rule(s, g, **{"cents": 500, "interval": "weekly", "weekday": 0, "monthday": 1, "today": D0, **bad})
+    assert s.exec(select(RecurringRule)).all() == []
+    r = ledger.add_rule(s, g, 500, "weekly", 4, 1, D0)
+    assert r.next_run.weekday() == 4 and r.next_run > D0
+    ledger.update_rule(s, r, 300, "monthly", 0, 15, r.next_run + timedelta(days=1))  # a payday has passed unnoticed
+    assert g.balance_cents == 500  # the old 5 EUR was paid out before the schedule moved
+    assert (r.amount_cents, r.interval, r.next_run.day) == (300, "monthly", 15)

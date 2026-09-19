@@ -100,7 +100,7 @@ def test_festgeld_flow_and_module_switch(family):
     assert "abgeholt" in family.post(f"/festgeld/{fg_id}/abholen").text
 
     login(family, 1, "1234")  # parent switches the module off for Mia
-    family.post("/eltern/kinder/2/module", data={})
+    family.post("/eltern/kinder/2", data={})
     login(family, 2, "1111")
     assert family.post("/festgeld/oeffnen", data={"cents": 100, "product_id": 1}).status_code == 403
     assert "/festgeld" not in family.get("/home").text  # tile is gone
@@ -126,8 +126,8 @@ def test_parent_configures_rates_and_kid_opens_two_deposits(family):
     assert "Turbo" not in family.get("/eltern").text
     family.post("/eltern/produkte", data={"name": "Turbo", "days": 3, "rate": "50", "period": 365})  # re-add (SQLite reuses id 4)
     assert family.post("/eltern/produkte", data={"name": "Kaputt", "days": 3, "rate": "6000", "period": 365}).status_code == 400
-    assert family.post("/eltern/kinder/2/module", data={"rate": "101", "festgeld": "on"}).status_code == 400  # > 100 % per week
-    family.post("/eltern/kinder/2/module", data={"rate": "0,04", "festgeld": "on"})  # per week, Mia's period
+    assert family.post("/eltern/kinder/2", data={"rate": "101", "festgeld": "on"}).status_code == 400  # > 100 % per week
+    family.post("/eltern/kinder/2", data={"rate": "0,04", "festgeld": "on"})  # per week, Mia's period
     parent_page = family.get("/eltern").text
     assert "0,04" in parent_page and "2,09 % pro Jahr" in parent_page and "1,5 % pro Woche" in parent_page
 
@@ -155,10 +155,10 @@ def test_parent_configures_rates_and_kid_opens_two_deposits(family):
 
 
 def test_parent_changes_avatar(family):
-    family.post("/eltern/kinder/2/module", data={"avatar": "🐼"})
+    family.post("/eltern/kinder/2", data={"avatar": "🐼"})
     with Session(main._engine()) as s:
         assert s.get(main.User, 2).avatar == "🐼"
-    family.post("/eltern/kinder/2/module", data={"avatar": "not-an-avatar"})  # unknown values are ignored
+    family.post("/eltern/kinder/2", data={"avatar": "not-an-avatar"})  # unknown values are ignored
     with Session(main._engine()) as s:
         assert s.get(main.User, 2).avatar == "🐼"
 
@@ -371,7 +371,7 @@ def test_absurd_amounts_are_rejected_not_crashes(family):
             ledger.check_amount(main.parse_euro(text))
     login(family, 1, "1234")
     assert family.post("/eltern/buchen", data={"account_id": account_id(2, "giro"), "amount": "nan"}).status_code == 400
-    assert family.post("/eltern/kinder/2/module", data={"rate": "inf"}).status_code == 400
+    assert family.post("/eltern/kinder/2", data={"rate": "inf"}).status_code == 400
 
 
 def test_double_tap_books_once(family):

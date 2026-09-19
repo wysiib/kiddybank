@@ -65,6 +65,10 @@ def set_giro_rate(s: Session, giro: Account, rate_bp: int, today: date, payout_d
     giro.interest_rate_bp, giro.payout_days = rate_bp, payout_days
 
 
+def kids(s: Session) -> list[User]:
+    return list(s.exec(select(User).where(User.role == "child").order_by(User.id)).all())
+
+
 def get_account(s: Session, user_id: int, type: str) -> Account:
     return s.exec(select(Account).where(Account.user_id == user_id, Account.type == type)).one()
 
@@ -199,6 +203,30 @@ def _next_run(d: date, interval: str) -> date:
     return date(year, month, min(d.day, calendar.monthrange(year, month)[1]))
 
 
+def _rule_anchor(interval: str, weekday: int, monthday: int) -> int:
+    if interval not in ("weekly", "monthly") or not (0 <= weekday <= 6 and 1 <= monthday <= 28):
+        raise LedgerError("err.amount")
+    return weekday if interval == "weekly" else monthday
+
+
+def add_rule(s: Session, giro: Account, cents: int, interval: str, weekday: int, monthday: int, today: date) -> RecurringRule:
+    """Pocket money from the virtual parent into `giro`, first paid on the next chosen weekday / day of the month."""
+    check_amount(cents)
+    anchor = _rule_anchor(interval, weekday, monthday)
+    r = RecurringRule(from_account_id=None, to_account_id=giro.id, amount_cents=cents, interval=interval,
+                      next_run=first_run(interval, anchor, today))
+    s.add(r)
+    s.flush()
+    return r
+
+
+def update_rule(s: Session, r: RecurringRule, cents: int, interval: str, weekday: int, monthday: int, today: date) -> None:
+    check_amount(cents)
+    anchor = _rule_anchor(interval, weekday, monthday)
+    ensure_up_to_date(s, s.get(Account, r.to_account_id), today)  # pay out anything due under the old schedule first
+    r.amount_cents, r.interval, r.next_run = cents, interval, first_run(interval, anchor, today)
+
+
 def first_run(interval: str, anchor: int, today: date) -> date:
     """First payday strictly after today: weekday 0-6 (Mon-Sun) for weekly, day of month 1-28 for monthly.
     Monthly caps at 28 so every month has the day and _next_run never drifts."""
@@ -254,13 +282,32 @@ def interest_cents(cents: int, rate_bp: int, days: int) -> int:
     return _round_cents(cents * rate_bp * days)
 
 
+def payout(cents: int, rate_bp: int, term_days: int) -> tuple[int, int]:
+    """(total, interest) of a Festgeld held to maturity. Feeds the preview, the deposit card and the booking."""
+    interest = interest_cents(cents, rate_bp, term_days)
+    return cents + interest, interest
+
+
 def festgeld_payout(fg: Account) -> tuple[int, int]:
-    """(total, interest) if collected at maturity. Same function feeds the preview and the booking."""
-    interest = interest_cents(fg.balance_cents, fg.interest_rate_bp, (fg.maturity_date - fg.opened_at).days)
-    return fg.balance_cents + interest, interest
+    return payout(fg.balance_cents, fg.interest_rate_bp, (fg.maturity_date - fg.opened_at).days)
 
 
-def collect_festgeld(s: Session, fg: Account, today: date) -> int:
+TOWER_DEMO_CENTS = 1000  # amount the offer bars show until the kid has dialled one in
+
+
+def offer_towers(s: Session, giro: Account, cents: int):
+    """The offers plus, per offer, the bonus this Giro vs. that offer would pay on `cents` and the bar heights (0-100, one shared scale)."""
+    products = s.exec(select(FestgeldProduct).order_by(FestgeldProduct.term_days)).all()
+    cents = cents if cents > 0 else TOWER_DEMO_CENTS
+    bonus = {p.id: (interest_cents(cents, giro.interest_rate_bp, p.term_days), interest_cents(cents, p.rate_bp, p.term_days))
+             for p in products}
+    top = max((b for pair in bonus.values() for b in pair), default=0)
+    height = lambda b: max(8, b * 100 // top) if b else 0  # noqa: E731  a tiny bonus still gets a visible stub
+    return products, {pid: {"giro": g, "fg": f, "giro_h": height(g), "fg_h": height(f)} for pid, (g, f) in bonus.items()}
+
+
+def collect_festgeld(s: Session, fg: Account, today: date) -> tuple[int, int]:
+    """Pays the deposit plus interest into the Giro. Returns (total, interest)."""
     status = festgeld_status(fg, today)
     if status != "ready":
         raise LedgerError("err.festgeld_locked" if status == "locked" else "err.already_collected")
@@ -270,7 +317,7 @@ def collect_festgeld(s: Session, fg: Account, today: date) -> int:
         post(s, None, fg, interest, "zins", today, seen=True)  # the kid is looking at it right now
     post(s, fg, giro, total, "festgeld", today, seen=True)
     fg.collected_at = stamp(today)
-    return total
+    return total, interest
 
 
 # --- reading -----------------------------------------------------------------------------------

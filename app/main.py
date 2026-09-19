@@ -1,7 +1,7 @@
 import os
 import secrets
 import time
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal, InvalidOperation
 from functools import lru_cache
 from pathlib import Path
@@ -50,10 +50,9 @@ templates.env.globals["t"] = t
 templates.env.globals["locale"] = LOCALE
 templates.env.filters["money"] = format_money
 templates.env.filters["date"] = format_date
-templates.env.filters["pct"] = lambda bp: format_percent(bp)
+templates.env.filters["pct"] = format_percent
 templates.env.filters["per"] = lambda bp, days: format_percent(ledger.period_bp(bp, days))  # annual bp -> "per week/month/year"
 
-TOWER_DEMO_CENTS = 1000  # amount the Festgeld bars show until the kid has dialled one in
 AVATARS = ["🐷", "🦊", "🐼", "🦁", "🐸", "🐙", "🦄", "🐯", "🐵", "🐰"]
 GOAL_EMOJIS = ["🎯", "🧸", "🚲", "⚽", "🎮", "📚", "🎁", "✈️", "🐶", "🍦"]
 
@@ -143,7 +142,7 @@ def kid(user: User = Depends(current_user), s: Session = db, today: date = Depen
 def parent(user: User = Depends(current_user), s: Session = db, today: date = Depends(get_today)) -> User:
     if user.role != "parent":
         raise HTTPException(403, "err.forbidden")
-    for k in s.exec(select(User).where(User.role == "child")).all():
+    for k in ledger.kids(s):
         ledger.catch_up_user(s, k.id, today)
     return user
 
@@ -473,7 +472,7 @@ def _festgeld_page(request: Request, s: Session, user: User, today: date, error:
         raise HTTPException(403, "err.module_off")
     rows = [{"acc": a, "status": ledger.festgeld_status(a, today), "days": (a.maturity_date - today).days,
              "payout": ledger.festgeld_payout(a)} for a in deposits]
-    products, towers = offer_towers(s, user, 0)
+    products, towers = ledger.offer_towers(s, ledger.get_account(s, user.id, "giro"), 0)
     return render(request, "festgeld.html", user=user, rows=rows, products=products, towers=towers, error=error,
                   tok=issue_token(request, "festgeld"), days=ledger.get_account(s, user.id, "giro").payout_days)
 
@@ -484,30 +483,15 @@ def festgeld_page(request: Request, user: User = Depends(kid), s: Session = db,
     return _festgeld_page(request, s, user, today)
 
 
-def offer_towers(s: Session, user: User, cents: int):
-    """The offers plus, per offer, the bonus a Giro vs. that offer would pay on `cents` and the bar heights (0-100, one shared scale)."""
-    products = s.exec(select(FestgeldProduct).order_by(FestgeldProduct.term_days)).all()
-    giro_bp = ledger.get_account(s, user.id, "giro").interest_rate_bp
-    cents = cents if cents > 0 else TOWER_DEMO_CENTS
-    bonus = {p.id: (ledger.interest_cents(cents, giro_bp, p.term_days), ledger.interest_cents(cents, p.rate_bp, p.term_days))
-             for p in products}
-    top = max((b for pair in bonus.values() for b in pair), default=0)
-    height = lambda b: max(8, b * 100 // top) if b else 0  # a tiny bonus still gets a visible stub
-    return products, {pid: {"giro": g, "fg": f, "giro_h": height(g), "fg_h": height(f)} for pid, (g, f) in bonus.items()}
-
-
 @app.get("/festgeld/vorschau")
 def festgeld_preview(request: Request, cents: int = 0, product_id: int = 0, user: User = Depends(kid),
-                     s: Session = db, today: date = Depends(get_today)):
+                     s: Session = db):
     product = s.get(FestgeldProduct, product_id)
-    products, towers = offer_towers(s, user, cents)
+    products, towers = ledger.offer_towers(s, ledger.get_account(s, user.id, "giro"), cents)
     ctx = dict(oob=True, products=products, towers=towers)  # also refreshes the bars in every offer tile
     if cents <= 0 or not product:
         return render(request, "_preview.html", total=None, **ctx)
-    fake = Account(user_id=user.id, type="festgeld", balance_cents=cents, interest_rate_bp=product.rate_bp,
-                   last_updated=today, interest_paid_on=today, opened_at=today,
-                   maturity_date=today + timedelta(days=product.term_days))
-    return render(request, "_preview.html", total=ledger.festgeld_payout(fake)[0], **ctx)
+    return render(request, "_preview.html", total=ledger.payout(cents, product.rate_bp, product.term_days)[0], **ctx)
 
 
 @app.post("/festgeld/oeffnen")
@@ -532,9 +516,8 @@ def festgeld_collect(request: Request, account_id: int, user: User = Depends(kid
     fg = s.get(Account, account_id)  # deliberately not gated on festgeld_enabled: never trap a kid's money
     if not fg or fg.user_id != user.id or fg.type != "festgeld":
         raise HTTPException(404)
-    interest = ledger.festgeld_payout(fg)[1]
     try:
-        total = ledger.collect_festgeld(s, fg, today)
+        total, interest = ledger.collect_festgeld(s, fg, today)
     except LedgerError as e:
         return _festgeld_page(request, s, user, today, e.args[0])
     return render(request, "done.html", user=user, emoji="🧰", msg=t("fg.collected", total=format_money(total)),
@@ -612,7 +595,7 @@ def goal_photo(goal_id: int, user: User = Depends(current_user), s: Session = db
 # --- parents -----------------------------------------------------------------------------------
 
 def _parent_page(request: Request, s: Session, user: User, error: str | None = None):
-    kids = s.exec(select(User).where(User.role == "child").order_by(User.id)).all()
+    kids = ledger.kids(s)
     accounts = [(k, ledger.get_account(s, k.id, "giro")) for k in kids]
     rules = [{"rule": r, "kid": s.get(User, s.get(Account, r.to_account_id).user_id)}
              for r in s.exec(select(RecurringRule).order_by(RecurringRule.id)).all()]
@@ -653,8 +636,8 @@ def add_kid(request: Request, name: str = Form(...), pin: str = Form(...), avata
     return redirect("/eltern")
 
 
-@app.post("/eltern/kinder/{uid}/module")
-def set_modules(request: Request, uid: int, rate: str = Form(""), period: int = Form(0),
+@app.post("/eltern/kinder/{uid}")
+def update_kid(request: Request, uid: int, rate: str = Form(""), period: int = Form(0),
                 festgeld: str | None = Form(None), stocks: str | None = Form(None), avatar: str = Form(""),
                 user: User = Depends(parent),
                 s: Session = db, today: date = Depends(get_today)):
@@ -685,23 +668,15 @@ def book(request: Request, account_id: int = Form(...), amount: str = Form(...),
     return redirect("/eltern")
 
 
-def _rule_input(amount: str, interval: str, weekday: int, monthday: int) -> tuple[int, str, int]:
-    cents = parse_euro(amount)
-    if cents <= 0 or interval not in ("weekly", "monthly") or not (0 <= weekday <= 6 and 1 <= monthday <= 28):
-        raise LedgerError("err.amount")
-    return cents, interval, weekday if interval == "weekly" else monthday
-
-
 @app.post("/eltern/dauerauftrag")
 def add_rule(request: Request, kid_id: int = Form(...), amount: str = Form(...), interval: str = Form(...),
              weekday: int = Form(0), monthday: int = Form(1), user: User = Depends(parent),
              s: Session = db, today: date = Depends(get_today)):
+    giro = ledger.get_account(s, child_or_404(s, kid_id).id, "giro")
     try:
-        cents, interval, anchor = _rule_input(amount, interval, weekday, monthday)
+        ledger.add_rule(s, giro, parse_euro(amount), interval, weekday, monthday, today)
     except LedgerError as e:
         return _parent_page(request, s, user, e.args[0])
-    s.add(RecurringRule(from_account_id=None, to_account_id=ledger.get_account(s, child_or_404(s, kid_id).id, "giro").id,
-                        amount_cents=cents, interval=interval, next_run=ledger.first_run(interval, anchor, today)))
     return redirect("/eltern")
 
 
@@ -713,12 +688,9 @@ def edit_rule(request: Request, rule_id: int, amount: str = Form(...), interval:
     if not r:
         raise HTTPException(404)
     try:
-        cents, interval, anchor = _rule_input(amount, interval, weekday, monthday)
+        ledger.update_rule(s, r, parse_euro(amount), interval, weekday, monthday, today)
     except LedgerError as e:
         return _parent_page(request, s, user, e.args[0])
-    # pay out anything already due under the old schedule before moving next_run
-    ledger.ensure_up_to_date(s, s.get(Account, r.to_account_id), today)
-    r.amount_cents, r.interval, r.next_run = cents, interval, ledger.first_run(interval, anchor, today)
     return redirect("/eltern")
 
 
