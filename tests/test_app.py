@@ -5,23 +5,23 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
-from app import auth, goals, ledger, main
-from app.models import Transaction
+from app import auth, goals, ledger, main, web
+from app.models import RecurringRule, Transaction, User
 
 D0 = date(2026, 1, 1)
 
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
-    monkeypatch.setattr(main, "DB_URL", f"sqlite:///{tmp_path}/app.db")
-    main._engine.cache_clear()
+    monkeypatch.setattr(web, "DB_URL", f"sqlite:///{tmp_path}/app.db")
+    web._engine.cache_clear()
     clock = {"today": D0}
-    main.app.dependency_overrides[main.get_today] = lambda: clock["today"]
+    main.app.dependency_overrides[web.get_today] = lambda: clock["today"]
     c = TestClient(main.app, follow_redirects=False)
     c.clock = clock
     yield c
     main.app.dependency_overrides.clear()
-    main._engine.cache_clear()
+    web._engine.cache_clear()
 
 
 def login(c, uid, pin):
@@ -30,7 +30,7 @@ def login(c, uid, pin):
 
 
 def account_id(user_id, type):
-    with Session(main._engine()) as s:
+    with Session(web._engine()) as s:
         return ledger.get_account(s, user_id, type).id
 
 
@@ -80,7 +80,7 @@ def test_transfer_confirm_and_insufficient(family):
     r = family.post("/ueberweisen/pruefen", data={**form, "cents": 300})
     assert "Vorher 10,00 €" in r.text and "Nachher 7,00 €" in r.text
     assert "Geschafft" in confirm(family, "/ueberweisen", cents=300, **form).text
-    with Session(main._engine()) as s:
+    with Session(web._engine()) as s:
         assert ledger.get_account(s, 1, "giro").balance_cents == 300
 
     own = {"to_id": account_id(2, "giro"), "cents": 100}
@@ -107,7 +107,7 @@ def test_festgeld_flow_and_module_switch(family):
 
 
 def test_interest_celebration_shows_until_seen(family):
-    with Session(main._engine()) as s:
+    with Session(web._engine()) as s:
         ledger.get_account(s, 2, "giro").balance_cents = 10_000
         s.commit()
     login(family, 2, "1111")
@@ -156,17 +156,17 @@ def test_parent_configures_rates_and_kid_opens_two_deposits(family):
 
 def test_parent_changes_avatar(family):
     family.post("/eltern/kinder/2", data={"avatar": "🐼"})
-    with Session(main._engine()) as s:
-        assert s.get(main.User, 2).avatar == "🐼"
+    with Session(web._engine()) as s:
+        assert s.get(User, 2).avatar == "🐼"
     family.post("/eltern/kinder/2", data={"avatar": "not-an-avatar"})  # unknown values are ignored
-    with Session(main._engine()) as s:
-        assert s.get(main.User, 2).avatar == "🐼"
+    with Session(web._engine()) as s:
+        assert s.get(User, 2).avatar == "🐼"
 
 
 def test_dauerauftrag_uses_chosen_weekday(family):
     family.post("/eltern/dauerauftrag", data={"kid_id": 2, "amount": "2,00", "interval": "weekly", "weekday": 4})
-    with Session(main._engine()) as s:
-        r = s.exec(select(main.RecurringRule)).one()
+    with Session(web._engine()) as s:
+        r = s.exec(select(RecurringRule)).one()
         assert r.next_run.weekday() == 4 and r.next_run > family.clock["today"]
 
 
@@ -309,7 +309,7 @@ def test_home_week_card(family):
     family.clock["today"] = D0 + timedelta(days=400)  # the manual bookings are old news, only interest is left
     later = family.get("/home").text
     assert "Zinsen" in later and "Von anderen" not in later and "Ausgegeben" not in later
-    with Session(main._engine()) as s:
+    with Session(web._engine()) as s:
         for tx in s.exec(select(Transaction)).all():
             s.delete(tx)
         s.commit()
@@ -319,14 +319,14 @@ def test_home_week_card(family):
 def test_edit_dauerauftrag(family):
     family.post("/eltern/dauerauftrag", data={"kid_id": 2, "amount": "2,00", "interval": "weekly", "weekday": 4})
     family.post("/eltern/dauerauftrag/1", data={"amount": "3,50", "interval": "monthly", "weekday": 4, "monthday": 15})
-    with Session(main._engine()) as s:
-        r = s.exec(select(main.RecurringRule)).one()
+    with Session(web._engine()) as s:
+        r = s.exec(select(RecurringRule)).one()
         assert (r.amount_cents, r.interval, r.next_run.day) == (350, "monthly", 15)
     assert 'value="3,50"' in family.get("/eltern").text
 
 
 def giro_cents(uid):
-    with Session(main._engine()) as s:
+    with Session(web._engine()) as s:
         return ledger.get_account(s, uid, "giro").balance_cents
 
 
@@ -367,7 +367,7 @@ def test_absurd_amounts_are_rejected_not_crashes(family):
     assert giro_cents(2) == 1000
     for text in ("nan", "inf", "1e30"):
         with pytest.raises(ledger.LedgerError):
-            ledger.check_amount(main.parse_euro(text))
+            ledger.check_amount(web.parse_euro(text))
     login(family, 1, "1234")
     assert family.post("/eltern/buchen", data={"account_id": account_id(2, "giro"), "amount": "nan"}).status_code == 400
     assert family.post("/eltern/kinder/2", data={"rate": "inf"}).status_code == 400
@@ -400,12 +400,12 @@ def test_wrong_pins_lock_the_account_for_a_while(family):
     for _ in range(auth.MAX_PIN_FAILURES):
         assert "Oh nein" in login(family, 2, "0000").text
     assert "Zu oft falsch" in login(family, 2, "1111").text  # even the right PIN waits now
-    with Session(main._engine()) as s:
-        s.get(main.User, 2).locked_until = datetime.now() - timedelta(seconds=1)
+    with Session(web._engine()) as s:
+        s.get(User, 2).locked_until = datetime.now() - timedelta(seconds=1)
         s.commit()
     assert login(family, 2, "1111").headers["location"] == "/"
-    with Session(main._engine()) as s:
-        assert s.get(main.User, 2).pin_failures == 0
+    with Session(web._engine()) as s:
+        assert s.get(User, 2).pin_failures == 0
 
 
 def test_kid_cannot_guess_the_parent_pin_at_the_cash_desk(family):
@@ -420,7 +420,7 @@ def test_kid_cannot_guess_the_parent_pin_at_the_cash_desk(family):
 def test_parent_session_expires_but_kid_session_stays(family, monkeypatch):
     login(family, 1, "1234")
     assert family.get("/eltern").status_code == 200
-    monkeypatch.setattr(main, "PARENT_IDLE", -1)  # every parent request is now "too late"
+    monkeypatch.setattr(web, "PARENT_IDLE", -1)  # every parent request is now "too late"
     assert family.get("/eltern").headers["location"] == "/login"
     assert family.get("/eltern").headers["location"] == "/login"  # the session is gone, not just refused once
     login(family, 2, "1111")

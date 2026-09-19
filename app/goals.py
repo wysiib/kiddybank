@@ -61,3 +61,8 @@ def finish_goal(goal: Goal, giro: Account, today: date) -> None:
 def unseen_reached_goals(s: Session, user_id: int) -> list[Goal]:
     giro = ledger.get_account(s, user_id, "giro")
     return [g for g in list_goals(s, user_id) if g.reached_seen_at is None and goal_reached(g, giro)]
+
+
+def cards(items: list[Goal], giro: Account) -> list[dict]:
+    """View model for the goal templates: each goal with its progress."""
+    return [{"goal": g, "pct": goal_progress(g, giro), "reached": goal_reached(g, giro)} for g in items]

@@ -7,6 +7,7 @@ from sqlmodel import Session, select
 from . import goals, ledger
 from .models import Account, Transaction
 
+
 def unseen_events(s: Session, user_id: int) -> list[Transaction]:
     ids = [a.id for a in s.exec(select(Account).where(Account.user_id == user_id)).all()]
     return list(s.exec(select(Transaction).where(
