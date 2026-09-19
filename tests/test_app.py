@@ -599,3 +599,13 @@ def test_parent_pin_reset_rejects_bad_input_and_non_kids(family):
     assert family.post("/eltern/kinder/1/pin", data={"pin": "5555"}).status_code == 404  # a parent is not a kid
     assert login(family, 2, "1111").headers["location"] == "/"
     assert family.post("/eltern/kinder/2/pin", data={"pin": "5555"}).status_code == 403  # kids can't reset
+
+
+def test_home_counts_down_to_the_interest_payout(family):
+    login(family, 2, "1111")  # 10 EUR at 1 % per week, paid every 7 days: 10 Cent
+    home = family.get("/home").text
+    assert home.count('class="pip"') == 6 and home.count("pip-now") == 1 and "pip-on" not in home
+    assert "10 Cent" in home
+    family.clock["today"] = D0 + timedelta(days=3)
+    home = family.get("/home").text
+    assert home.count("pip-on") == 3  # three of seven days are over

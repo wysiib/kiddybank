@@ -35,13 +35,16 @@ def _events(s: Session, user: User) -> list[dict]:
         {"type": "goal", "goal": g} for g in goals.unseen_reached_goals(s, user.id)]
 
 
-def _interest_hint(acc: Account, today: date) -> str:
-    """Empty when the payout would round to 0 cents: nothing gets booked then, so don't promise it."""
+def _interest_hint(acc: Account, today: date) -> tuple[str, dict | None]:
+    """(sentence, dots picture). Both empty when the payout would round to 0 cents: nothing gets booked then, so don't promise it."""
     days, cents = ledger.next_interest(acc, today)
     if not cents:
-        return ""
+        return "", None
     when = t("home.interest.tomorrow") if days == 1 else t("home.interest.days", days=days)
-    return t("home.interest", when=when, amount=format_money(cents))
+    unit = coins.time_unit(acc.payout_days)
+    total = -(-acc.payout_days // unit)
+    return t("home.interest", when=when, amount=format_money(cents)), \
+        {"total": total, "on": max(0, total - -(-days // unit)), "cents": cents, "unit": unit}
 
 
 @router.get("/home")
@@ -50,8 +53,9 @@ def home(request: Request, user: User = Depends(kid), s: Session = db, today: da
     week = {k: v for k, v in ledger.week_summary(s, giro, today).items() if v}
     deposits = active_deposits(s, user)
     cards = goals.cards([g for g in goals.list_goals(s, user.id) if not g.done_at], giro)
+    hint, payout = _interest_hint(giro, today)
     return render(request, "home.html", user=user, giro=giro, deposits=deposits, top=max(cards, key=lambda c: c["pct"], default=None), week=week,
-                  events=_events(s, user), interest_hint=_interest_hint(giro, today), festgeld_visible=user.festgeld_enabled or bool(deposits))
+                  events=_events(s, user), interest_hint=hint, payout=payout, festgeld_visible=user.festgeld_enabled or bool(deposits))
 
 
 @router.post("/gesehen")

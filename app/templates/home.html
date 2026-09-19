@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_goal.html" import visual, bar %}
+{% from "_coins.html" import pips %}
 {% block content %}
 {% if events %}{% include "_celebration.html" %}{% endif %}
 <h1 class="text-4xl font-extrabold">{{ user.avatar }} {{ t('home.hello', name=user.name) }}</h1>
@@ -10,6 +11,14 @@
     <span class="text-base text-slate-500">{{ t('acct.giro.sub') }}</span>
   </div>
   <div class="text-5xl font-extrabold">{{ giro.balance_cents|money }}</div>
+  {% if payout %}
+  <div class="flex items-center gap-3">
+    {{ pips(payout.total, payout.on, interest_hint) }}
+    <span class="text-2xl">→</span>
+    <span class="rounded-full border-4 border-amber-700 bg-amber-400 px-3 py-1 text-lg font-extrabold text-amber-900">{{ payout.cents|compact }}</span>
+  </div>
+  <p class="text-sm text-slate-500">{{ t('cal.unit.' ~ payout.unit) }}</p>
+  {% endif %}
   {% if interest_hint %}<p class="lesson">{{ interest_hint }}</p>{% endif %}
 </a>
 
