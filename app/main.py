@@ -332,7 +332,7 @@ def festgeld_page(request: Request, user: User = Depends(kid), s: Session = Depe
         raise HTTPException(403, t("err.module_off"))
     rows = [{"acc": a, "status": ledger.festgeld_status(a, today), "days": (a.maturity_date - today).days,
              "payout": ledger.festgeld_payout(a)} for a in deposits]
-    products = s.exec(select(FestgeldProduct).where(FestgeldProduct.active).order_by(FestgeldProduct.term_days)).all()
+    products = s.exec(select(FestgeldProduct).order_by(FestgeldProduct.term_days)).all()
     giro_bp = ledger.get_account(s, user.id, "giro").interest_rate_bp
     return render(request, "festgeld.html", user=user, rows=rows, products=products, giro_bp=giro_bp, error=error)
 
@@ -341,7 +341,7 @@ def festgeld_page(request: Request, user: User = Depends(kid), s: Session = Depe
 def festgeld_preview(request: Request, cents: int = 0, product_id: int = 0, user: User = Depends(kid),
                      s: Session = Depends(get_session), today: date = Depends(get_today)):
     product = s.get(FestgeldProduct, product_id)
-    if cents <= 0 or not product or not product.active:
+    if cents <= 0 or not product:
         return render(request, "_preview.html", total=None)
     fake = Account(user_id=user.id, type="festgeld", balance_cents=cents, interest_rate_bp=product.rate_bp,
                    last_updated=today, interest_paid_on=today, opened_at=today,
@@ -568,6 +568,24 @@ def edit_rule(request: Request, rule_id: int, amount: str = Form(...), interval:
 def delete_rule(rule_id: int, user: User = Depends(parent), s: Session = Depends(get_session)):
     if r := s.get(RecurringRule, rule_id):
         s.delete(r)
+    return redirect("/eltern")
+
+
+@app.post("/eltern/produkte/{product_id}/loeschen")
+def delete_product(product_id: int, user: User = Depends(parent), s: Session = Depends(get_session)):
+    if p := s.get(FestgeldProduct, product_id):
+        s.delete(p)  # safe: deposits snapshot name, rate and maturity, nothing references the product
+    return redirect("/eltern")
+
+
+@app.post("/eltern/produkte")
+def add_product(request: Request, name: str = Form(...), days: int = Form(...), rate: str = Form(...),
+                user: User = Depends(parent), s: Session = Depends(get_session)):
+    try:
+        ledger.add_product(s, name, days, parse_percent(rate))
+    except LedgerError as e:
+        s.rollback()
+        return _parent_page(request, s, user, e.args[0])
     return redirect("/eltern")
 
 

@@ -179,12 +179,6 @@ def add_product(s: Session, name: str, term_days: int, rate_bp: int) -> Festgeld
     return p
 
 
-def update_product(p: FestgeldProduct, name: str, term_days: int, rate_bp: int, active: bool) -> None:
-    """Only affects deposits opened afterwards: each deposit snapshots name, rate and maturity."""
-    _check_product(name, term_days, rate_bp)
-    p.name, p.term_days, p.rate_bp, p.active = name.strip(), term_days, rate_bp, active
-
-
 def seed_default_products(s: Session) -> None:
     if not s.exec(select(FestgeldProduct)).first():
         for name, days, bp in DEFAULT_PRODUCTS:
@@ -192,8 +186,6 @@ def seed_default_products(s: Session) -> None:
 
 
 def open_festgeld(s: Session, giro: Account, cents: int, product: FestgeldProduct, today: date) -> Account:
-    if not product.active:
-        raise LedgerError("err.term")
     ensure_up_to_date(s, giro, today)
     _check_debit(giro, cents)
     fg = Account(user_id=giro.user_id, type="festgeld", name=product.name, interest_rate_bp=product.rate_bp,

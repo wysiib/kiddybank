@@ -129,8 +129,8 @@ def test_parent_configures_rates_and_kid_opens_two_deposits(family):
         return family.get("/festgeld").text.split("Neue Schatztruhe")[1]
 
     assert "Turbo" in offers()
-    login(family, 1, "1234")  # deactivating hides it from kids; the open deposit is unaffected
-    family.post("/eltern/produkte/4", data={"name": "Turbo", "days": 3, "rate": "50"})
+    login(family, 1, "1234")  # deleting hides it from kids; the open deposit is unaffected
+    family.post("/eltern/produkte/4/loeschen")
     login(family, 2, "1111")
     assert "Turbo" not in offers() and "Kurz" in offers()
     assert "Turbo" in family.get("/festgeld").text  # still shown on the deposit card

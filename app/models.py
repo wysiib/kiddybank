@@ -22,7 +22,6 @@ class FestgeldProduct(SQLModel, table=True):
     name: str
     term_days: int
     rate_bp: int  # basis points per year
-    active: bool = True
 
 
 class Account(SQLModel, table=True):

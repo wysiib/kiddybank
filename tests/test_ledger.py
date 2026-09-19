@@ -142,21 +142,12 @@ def test_several_deposits_at_once_keep_their_own_rate(s, kids, kurz):
     assert giro(s, mia).balance_cents == 3_000
     assert (a.name, a.interest_rate_bp, b.name, b.interest_rate_bp) == ("Kurz", 1200, "Lang", 2000)
 
-    ledger.update_product(lang, "Lang", 30, 500, True)  # a later rate change must not touch open deposits
+    lang.rate_bp = 500  # a later rate change must not touch open deposits
     assert b.interest_rate_bp == 2000
     assert ledger.festgeld_payout(b)[1] == 4_000 * 2000 * 30 // ledger.INTEREST_DENOM
 
     ledger.collect_festgeld(s, a, D0 + timedelta(days=7))  # collecting one leaves the other locked
     assert ledger.festgeld_status(b, D0 + timedelta(days=7)) == "locked"
-
-
-def test_inactive_product_cannot_be_opened(s, kids, kurz):
-    mia, _ = kids
-    fund(s, giro(s, mia), 1_000)
-    ledger.update_product(kurz, "Kurz", 7, 1200, active=False)
-    with pytest.raises(LedgerError, match="err.term"):
-        ledger.open_festgeld(s, giro(s, mia), 500, kurz, D0)
-    assert giro(s, mia).balance_cents == 1_000
 
 
 def test_rate_change_settles_interest_at_the_old_rate_first(s, kids):

@@ -60,13 +60,9 @@
   <h2 class="text-2xl font-extrabold">{{ t('par.products') }}</h2>
   <p class="lesson">{{ t('par.product.hint') }}</p>
   {% for p in products %}
-  <form method="post" action="/eltern/produkte/{{ p.id }}" class="card flex flex-wrap items-end gap-3">
-    <label class="block flex-1">{{ t('par.product.name') }}<input class="input" name="name" value="{{ p.name }}" required></label>
-    <label class="block w-28">{{ t('par.product.days') }}<input class="input" name="days" type="number" min="1" value="{{ p.term_days }}" required></label>
-    <label class="block w-36">{{ t('par.product.rate') }}<input class="input" name="rate" inputmode="decimal" value="{{ p.rate_bp|pct }}" required></label>
-    <label class="flex items-center gap-2 pb-4"><input type="checkbox" name="active" {{ 'checked' if p.active }}> {{ t('par.product.active') }}</label>
-    <button class="btn btn-alt">{{ t('app.save') }}</button>
-    <button class="btn btn-alt" formaction="/eltern/produkte/{{ p.id }}/loeschen" formnovalidate>{{ t('par.product.delete') }}</button>
+  <form method="post" action="/eltern/produkte/{{ p.id }}/loeschen" class="card flex items-center gap-3">
+    <span class="flex-1 font-bold">{{ p.name }} · {{ t('fg.days.1') if p.term_days == 1 else t('fg.days', n=p.term_days) }} · {{ p.rate_bp|pct }} %</span>
+    <button class="btn btn-alt">{{ t('par.product.delete') }}</button>
   </form>
   {% endfor %}
   <form method="post" action="/eltern/produkte" class="card flex flex-wrap items-end gap-3">
