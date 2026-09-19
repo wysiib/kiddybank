@@ -36,8 +36,8 @@ def _festgeld_page(request: Request, s: Session, user: User, today: date, error:
         raise HTTPException(403, "err.module_off")
     rows = [{"acc": a, "status": festgeld.festgeld_status(a, today), "days": (a.maturity_date - today).days,
              "payout": festgeld.festgeld_payout(a)} for a in deposits]
-    products, towers = festgeld.offer_towers(s, ledger.get_account(s, user.id, "giro"), 0)
-    return render(request, "festgeld.html", user=user, rows=rows, products=products, towers=towers, error=error,
+    products, view = festgeld.offer_stacks(s, ledger.get_account(s, user.id, "giro"), 0)
+    return render(request, "festgeld.html", user=user, rows=rows, products=products, view=view, error=error,
                   tok=issue_token(request, "festgeld"), days=ledger.get_account(s, user.id, "giro").payout_days)
 
 
@@ -51,8 +51,8 @@ def festgeld_page(request: Request, user: User = Depends(kid), s: Session = db,
 def festgeld_preview(request: Request, cents: int = 0, product_id: int = 0, user: User = Depends(kid),
                      s: Session = db):
     product = s.get(FestgeldProduct, product_id)
-    products, towers = festgeld.offer_towers(s, ledger.get_account(s, user.id, "giro"), cents)
-    ctx = dict(oob=True, products=products, towers=towers)  # also refreshes the bars in every offer tile
+    products, view = festgeld.offer_stacks(s, ledger.get_account(s, user.id, "giro"), cents)
+    ctx = dict(oob=True, products=products, view=view)  # also refreshes the picture in every offer tile
     if cents <= 0 or not product:
         return render(request, "_preview.html", total=None, **ctx)
     return render(request, "_preview.html", total=festgeld.payout(cents, product.rate_bp, product.term_days)[0], **ctx)

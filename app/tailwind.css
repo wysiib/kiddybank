@@ -9,9 +9,6 @@
   .card { @apply rounded-3xl bg-white p-5 shadow; }
   .lesson { @apply rounded-2xl bg-sky-100 p-4 text-lg text-sky-900; }
   .error { @apply rounded-2xl bg-red-100 p-4 font-bold text-red-800; }
-  .tower { @apply w-9 rounded-t-lg; background: repeating-linear-gradient(to top, var(--tower) 0 0.3rem, color-mix(in srgb, var(--tower) 70%, black) 0.3rem 0.4rem); }
-  .tower-giro { --tower: var(--color-slate-300); }
-  .tower-fg { --tower: var(--color-amber-400); }
   .input { @apply min-h-14 w-full rounded-2xl border-2 border-slate-200 bg-white px-4 text-xl; }
 
   /* Countable pictures. A stack is a side view: .stack-big = 1 unit of own money (silver), .stack-small = interest (gray or gold). */

@@ -37,14 +37,14 @@
       {% for p in products %}
       <label class="tile choice">
         <input type="radio" name="product_id" value="{{ p.id }}" class="sr-only" required>
-        <span class="text-4xl">🗓️</span>{{ p.name }}
-        <span class="text-base font-normal">{{ t('fg.days.1') if p.term_days == 1 else t('fg.days', n=p.term_days) }}</span>
-        <div id="towers-{{ p.id }}">{% include "_towers.html" %}</div>
+        {{ p.name }}
+        <div id="offer-{{ p.id }}" class="flex flex-col items-center gap-2">{% include "_offer.html" %}</div>
       </label>
       {% else %}
       <p class="lesson col-span-3">{{ t('fg.no_products') }}</p>
       {% endfor %}
     </div>
+    {% if products %}{% include "_offer_unit.html" %}{% endif %}
   </section>
   <div id="preview">{% with total = None %}{% include "_preview.html" %}{% endwith %}</div>
   <button class="btn w-full">🔒 {{ t('fg.start') }}</button>

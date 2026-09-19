@@ -111,6 +111,16 @@ def test_festgeld_flow_and_module_switch(family):
     assert "/festgeld" not in family.get("/home").text  # tile is gone
 
 
+def test_festgeld_offers_show_term_as_calendars_and_interest_as_coins(family):
+    login(family, 2, "1111")
+    page = family.get("/festgeld").text.split("Neue Schatztruhe")[1]
+    assert page.count('class="cals"') == 3  # Kurz 7, Mittel 14, Lang 30 days
+    assert "1 Kalender = 1 Woche" in page  # 30 days is more than 13 days, so the scene counts weeks
+    assert "Kleine Münze = 10 Cent" in page  # unit printed once: Lang pays about 1,29 € on the 10 EUR demo, 13 coins of 10 Cent stay under the cap of 20
+    assert page.count("cal-part") == 1  # Lang: 4 weeks and 2 days ends in a smaller calendar; 7 and 14 days are whole weeks
+    assert "stack-gold" in page and "stack-small" in page
+
+
 def test_interest_celebration_shows_until_seen(family):
     with Session(web._engine()) as s:
         ledger.get_account(s, 2, "giro").balance_cents = 10_000
@@ -143,10 +153,11 @@ def test_parent_configures_rates_and_kid_opens_two_deposits(family):
     turbo = product_id("Turbo")
     open_deposit(family, 400, turbo)  # the new "Turbo" product
     page = family.get("/festgeld").text
-    assert "15 Cent" in page  # bars start from the 10 EUR demo amount: Kurz (1,5 % per week) pays 15 Cent, this kid's Giro 0
+    assert "15 Cent" in page  # offers start from the 10 EUR demo amount: Kurz (1,5 % per week) pays 15 Cent, this kid's Giro 0
     bars = family.get("/festgeld/vorschau", params={"cents": 10_000, "product_id": 1}).text  # 100 EUR
-    assert 'id="towers-1"' in bars and "1,50 €" in bars and "4 Cent" in bars  # Kurz 1,5 % for a week vs 0,04 % Giro
-    assert f'id="towers-{turbo}"' in bars and "41 Cent" in bars  # Turbo 50 %/year for 3 days, and every tile is refreshed
+    assert 'id="offer-1"' in bars and "1,50 €" in bars and "4 Cent" in bars  # Kurz 1,5 % for a week vs 0,04 % Giro
+    assert f'id="offer-{turbo}"' in bars and "41 Cent" in bars  # Turbo 50 %/year for 3 days, and every tile is refreshed
+    assert 'id="offer-unit"' in bars  # the unit note is refreshed too, the scale can change with the amount
     assert "Kurz" in page and "Turbo" in page and page.count("Noch 7 Tage") == 1 and "Noch 3 Tage" in page
 
     def offers():  # what the kid can pick from, i.e. the part of the page after the "new deposit" heading
