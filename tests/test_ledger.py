@@ -297,3 +297,21 @@ def test_goal_already_affordable_has_no_celebration(s, kids):
     g = make_goal(s, mia)
     assert ledger.goal_reached(g, giro(s, mia))
     assert ledger.unseen_reached_goals(s, mia.id) == []
+
+
+def test_week_summary_buckets_and_window(s, kids, kurz):
+    from datetime import datetime, time
+    mia, tom = kids
+    sp = giro(s, mia)
+    at = lambda days: datetime.combine(D0 - timedelta(days=days), time(9))  # noqa: E731
+    ledger.post(s, None, sp, 500, "dauerauftrag", now=at(0))
+    ledger.post(s, None, sp, 300, "dauerauftrag", now=at(6))  # oldest day still inside
+    ledger.post(s, None, sp, 900, "dauerauftrag", now=at(7))  # too old
+    ledger.post(s, None, sp, 40, "zins", now=at(1))
+    ledger.post(s, None, sp, 700, "manual", now=at(2))  # parent deposit
+    ledger.post(s, sp, None, 250, "manual", now=at(3))  # parent withdrawal
+    ledger.post(s, sp, giro(s, tom), 150, "manual", now=at(3))  # gift to Tom
+    fg = ledger.open_festgeld(s, sp, 200, kurz, D0)  # saving is neither income nor spending
+    assert ledger.week_summary(s, sp, D0) == {"dauerauftrag": 800, "zins": 40, "other": 700, "spent": 400}
+    assert ledger.week_summary(s, giro(s, tom), D0) == {"dauerauftrag": 0, "zins": 0, "other": 150, "spent": 0}
+    assert fg.balance_cents == 200

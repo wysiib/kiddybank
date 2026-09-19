@@ -8,8 +8,7 @@ Done: **Sparziele** (spec and plan in `docs/superpowers/`).
 
 ## Training wheels
 
-- **Wochen-Rückblick (home card).** "Diese Woche: +2,00 € Taschengeld, +0,04 € Zinsen, -1,50 € ausgegeben."
-  Teaches income vs. spending. Derived from existing `Transaction` rows, no schema change.
+- ~~**Wochen-Rückblick (home card).**~~ Done: rolling 7 days, `ledger.week_summary`, hidden when the week is empty.
 - **"Kann ich mir das leisten?" on transfer.** Show what is left after the transfer and warn when it
   uses most of the balance. Extends the existing before/after line.
 - **Geld-Wunsch an Mama/Papa.** Kid asks a parent for money with a reason; the parent approves or

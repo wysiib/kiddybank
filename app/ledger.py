@@ -254,6 +254,21 @@ def statement(s: Session, acc: Account, limit: int = 50) -> list[tuple[Transacti
     return rows
 
 
+def week_summary(s: Session, giro: Account, today: date) -> dict[str, int]:
+    """Cents in / out of the Giro over the last 7 days (today + 6), for the home card.
+    Festgeld moves are saving, not income or spending, so they are left out."""
+    since = datetime.combine(today - timedelta(days=6), time(0))  # no upper bound: post() stamps real time, never the future
+    out = {"dauerauftrag": 0, "zins": 0, "other": 0, "spent": 0}
+    for tx in s.exec(select(Transaction).where(
+            (Transaction.from_account_id == giro.id) | (Transaction.to_account_id == giro.id),
+            Transaction.timestamp >= since, Transaction.type != "festgeld")).all():
+        if tx.to_account_id == giro.id:
+            out[tx.type if tx.type in ("zins", "dauerauftrag") else "other"] += tx.amount_cents
+        else:
+            out["spent"] += tx.amount_cents
+    return out
+
+
 # --- goals -------------------------------------------------------------------------------------
 
 MAX_ACTIVE_GOALS = 3

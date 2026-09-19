@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
 from app import ledger, main
+from app.models import Transaction
 
 D0 = date(2026, 1, 1)
 
@@ -273,3 +274,19 @@ def test_parent_catch_up_keeps_kid_celebrations(family):
     family.post("/gesehen")
     home = family.get("/home").text
     assert "Zinsen bekommen" not in home
+
+
+def test_home_week_card(family):
+    login(family, 2, "1111")
+    home = family.get("/home").text
+    assert "Deine Woche" in home and "Von anderen" in home and "+10,00 €" in home and "Ausgegeben" not in home
+    family.post("/ueberweisen", data={"to_id": account_id(1, "giro"), "cents": 300})
+    assert "-3,00 €" in family.get("/home").text
+    family.clock["today"] = D0 + timedelta(days=400)  # the manual bookings are old news, only interest is left
+    later = family.get("/home").text
+    assert "Zinsen" in later and "Von anderen" not in later and "Ausgegeben" not in later
+    with Session(main._engine()) as s:
+        for tx in s.exec(select(Transaction)).all():
+            s.delete(tx)
+        s.commit()
+    assert "Deine Woche" not in family.get("/home").text  # empty week: no card

@@ -34,6 +34,12 @@ STRINGS = {
         "home.statement": "Kontoauszug",
         "home.rate": "{rate} Zinsen im Jahr: {cents} für jeden Euro",
         "home.no_balance": "Noch nichts drin",
+        "week.title": "Deine Woche",
+        "week.dauerauftrag": "Taschengeld",
+        "week.zins": "Zinsen",
+        "week.other": "Von anderen",
+        "week.spent": "Ausgegeben",
+        "week.lesson": "Taschengeld und Zinsen kommen rein. Was du ausgibst, geht raus.",
 
         # celebrations
         "cel.zins": "Du hast {amount} Zinsen bekommen!",

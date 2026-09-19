@@ -14,6 +14,19 @@
   <p class="lesson">{{ t('home.rate', rate=r.rate, cents=r.cents) }}</p>
 </a>
 
+{% if week %}
+<a href="/konto/{{ giro.id }}" class="card block space-y-2">
+  <div class="font-bold">📅 {{ t('week.title') }}</div>
+  {% for k, cents in week.items() %}
+  <div class="flex items-center justify-between">
+    <span>{{ t('week.' ~ k) }}</span>
+    <span class="text-2xl font-extrabold {{ 'text-red-600' if k == 'spent' else 'text-green-600' }}">{{ '-' if k == 'spent' else '+' }}{{ cents|money }}</span>
+  </div>
+  {% endfor %}
+  <p class="lesson">{{ t('week.lesson') }}</p>
+</a>
+{% endif %}
+
 {% if top %}
 <a href="/ziele" class="card flex items-center gap-4">
   {{ visual(top.goal, top.pct, 'h-20 w-20') }}

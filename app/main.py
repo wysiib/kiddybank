@@ -223,11 +223,12 @@ def _rate(acc: Account) -> dict:
 
 
 @app.get("/home")
-def home(request: Request, user: User = Depends(kid), s: Session = Depends(get_session)):
+def home(request: Request, user: User = Depends(kid), s: Session = Depends(get_session), today: date = Depends(get_today)):
     giro = ledger.get_account(s, user.id, "giro")
+    week = {k: v for k, v in ledger.week_summary(s, giro, today).items() if v}
     deposits = [a for a in own_accounts(s, user, "festgeld") if not a.collected_at]
     cards = _goal_cards([g for g in ledger.list_goals(s, user.id) if not g.done_at], giro)
-    return render(request, "home.html", user=user, giro=giro, deposits=deposits, top=max(cards, key=lambda c: c["pct"], default=None),
+    return render(request, "home.html", user=user, giro=giro, deposits=deposits, top=max(cards, key=lambda c: c["pct"], default=None), week=week,
                   events=_events(s, user), rate=_rate, festgeld_visible=user.festgeld_enabled or bool(deposits))
 
 
