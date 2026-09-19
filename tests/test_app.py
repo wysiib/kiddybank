@@ -416,3 +416,21 @@ def test_kid_cannot_guess_the_parent_pin_at_the_cash_desk(family):
         assert "nicht der Code" in family.post("/bar/einzahlen", data={"cents": 500, "pin": "0000", "tok": tok}).text
     r = family.post("/bar/einzahlen", data={"cents": 500, "pin": "1234", "tok": token(family.post("/bar/einzahlen/pruefen", data={"cents": 500}))})
     assert "Zu oft falsch" in r.text and giro_cents(2) == 1000  # the right PIN is refused while locked
+
+
+def test_parent_session_expires_but_kid_session_stays(family, monkeypatch):
+    login(family, 1, "1234")
+    assert family.get("/eltern").status_code == 200
+    monkeypatch.setattr(main, "PARENT_IDLE", -1)  # every parent request is now "too late"
+    assert family.get("/eltern").headers["location"] == "/login"
+    assert family.get("/eltern").headers["location"] == "/login"  # the session is gone, not just refused once
+    login(family, 2, "1111")
+    assert family.get("/home").status_code == 200
+
+
+def test_session_secret_is_private_and_stable(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("KIDDYBANK_SECRET", raising=False)
+    first = main._secret()
+    assert main._secret() == first
+    assert ((tmp_path / ".session_secret").stat().st_mode & 0o777) == 0o600

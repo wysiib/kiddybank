@@ -1,7 +1,7 @@
 // Cache-first for static assets, network-first for pages (last known balance works offline).
-// Never caches POSTs or HTMX partials, and drops all cached pages on logout so a shared tablet
+// Never caches POSTs or HTMX partials, and drops all cached pages on logout and login so a shared tablet
 // can't show one kid's balance to the next.
-const ASSETS = "kb-assets-v6";
+const ASSETS = "kb-assets-v7";
 const PAGES = "kb-pages-v1";
 
 self.addEventListener("install", (e) => {
@@ -23,7 +23,7 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(req.url);
   if (url.origin !== location.origin) return;
 
-  if (url.pathname === "/logout") {
+  if (url.pathname === "/logout" || (req.method === "POST" && url.pathname.startsWith("/login/"))) {
     e.waitUntil(caches.delete(PAGES).then(() => caches.open(PAGES)).then((c) => c.add("/offline")));
     return; // the POST itself goes to the network untouched
   }

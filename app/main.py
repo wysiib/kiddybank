@@ -1,5 +1,6 @@
 import os
 import secrets
+import time
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from functools import lru_cache
@@ -23,12 +24,18 @@ BASE = Path(__file__).parent
 DB_URL = os.environ.get("KIDDYBANK_DB", "sqlite:///kiddybank.db")
 
 
+PARENT_IDLE = 15 * 60  # seconds; kids stay signed in for the cookie's 30 days, parents on a shared tablet must not
+
+
 def _secret() -> str:
     if key := os.environ.get("KIDDYBANK_SECRET"):
         return key
     f = Path(".session_secret")  # persisted so restarts don't log everyone out
-    if not f.exists():
-        f.write_text(secrets.token_hex(32))
+    try:
+        with os.fdopen(os.open(f, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w") as fh:  # owner-only, no race between workers
+            fh.write(secrets.token_hex(32))
+    except FileExistsError:
+        pass
     return f.read_text()
 
 
@@ -78,10 +85,20 @@ def redirect(url: str):
     return RedirectResponse(url, status_code=303)
 
 
+def sign_in(request: Request, user: User) -> None:
+    request.session.clear()
+    request.session["uid"] = user.id
+    request.session["seen"] = time.time()
+
+
 def current_user(request: Request, s: Session = Depends(get_session)) -> User:
     user = s.get(User, request.session.get("uid") or 0)
+    if user and user.role == "parent" and time.time() - request.session.get("seen", 0) > PARENT_IDLE:
+        request.session.clear()
+        user = None
     if not user:
         raise HTTPException(303, headers={"Location": "/login"})
+    request.session["seen"] = time.time()
     return user
 
 
@@ -185,7 +202,7 @@ def setup(request: Request, name: str = Form(...), pin: str = Form(...), s: Sess
         return render(request, "setup.html", 400, error=e.args[0])
     u = ledger.create_user(s, name.strip(), "parent", pin, "👪", today)
     ledger.seed_default_products(s)
-    request.session["uid"] = u.id
+    sign_in(request, u)
     return redirect("/eltern")
 
 
@@ -213,8 +230,7 @@ def pin_submit(request: Request, uid: int, pin: str = Form(...), s: Session = De
         auth.pin_failed(user)
         return render(request, "pin.html", 200, who=user, error="login.pin.wrong")
     auth.pin_ok(user)
-    request.session.clear()
-    request.session["uid"] = user.id
+    sign_in(request, user)
     return redirect("/")
 
 
