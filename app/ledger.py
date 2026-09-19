@@ -9,7 +9,7 @@ from datetime import date, datetime, time, timedelta
 from sqlmodel import Session, select
 
 from .auth import hash_pin
-from .models import Account, FestgeldProduct, RecurringRule, Transaction, User
+from .models import Account, FestgeldProduct, Goal, RecurringRule, Transaction, User
 
 INTEREST_DENOM = 10_000 * 365  # interest_accrued unit: 1 cent
 INTEREST_PAYOUT_DAYS = 7  # interest is booked at most weekly, so celebrations stay special
@@ -237,6 +237,8 @@ def mark_seen(s: Session, user_id: int) -> None:
     now = datetime.now()
     for t in unseen_events(s, user_id):
         t.seen_at = now
+    for g in unseen_reached_goals(s, user_id):
+        g.reached_seen_at = now
 
 
 def statement(s: Session, acc: Account, limit: int = 50) -> list[tuple[Transaction, int, int]]:
@@ -250,3 +252,59 @@ def statement(s: Session, acc: Account, limit: int = 50) -> list[tuple[Transacti
         rows.append((t, delta, bal))
         bal -= delta
     return rows
+
+
+# --- goals -------------------------------------------------------------------------------------
+
+MAX_ACTIVE_GOALS = 3
+MAX_PHOTO_BYTES = 300_000  # the browser shrinks photos to ~50 KB, this only stops abuse
+
+
+def list_goals(s: Session, user_id: int) -> list[Goal]:
+    # ponytail: photos load with the row; defer() them if goal counts ever grow
+    return list(s.exec(select(Goal).where(Goal.user_id == user_id).order_by(Goal.id)).all())
+
+
+def goal_progress(goal: Goal, giro: Account) -> int:
+    """Whole percent (0-100) of the target the Giro balance covers."""
+    if goal.done_at:
+        return 100
+    return max(0, min(100, giro.balance_cents * 100 // goal.target_cents))
+
+
+def goal_reached(goal: Goal, giro: Account) -> bool:
+    return goal.done_at is None and giro.balance_cents >= goal.target_cents
+
+
+def create_goal(s: Session, user_id: int, name: str, emoji: str, target_cents: int, photo: bytes | None) -> Goal:
+    name = name.strip()[:40]
+    if target_cents <= 0:
+        raise LedgerError("err.amount")
+    if photo is not None:
+        if len(photo) > MAX_PHOTO_BYTES:
+            raise LedgerError("err.photo_size")
+        # ponytail: JPEG only (the browser re-encodes everything to JPEG); add Pillow if other formats are ever needed
+        if not photo.startswith(b"\xff\xd8\xff"):
+            raise LedgerError("err.photo_type")
+    if not name and photo is None:
+        raise LedgerError("err.goal_empty")
+    if sum(1 for g in list_goals(s, user_id) if g.done_at is None) >= MAX_ACTIVE_GOALS:
+        raise LedgerError("err.goal_limit")
+    now = datetime.now()
+    goal = Goal(user_id=user_id, name=name, emoji=emoji, target_cents=target_cents, photo=photo, created_at=now)
+    if goal_reached(goal, get_account(s, user_id, "giro")):
+        goal.reached_seen_at = now  # already affordable at creation: no fake celebration
+    s.add(goal)
+    s.flush()
+    return goal
+
+
+def finish_goal(goal: Goal, giro: Account) -> None:
+    if not goal_reached(goal, giro):
+        raise LedgerError("err.goal_not_reached")
+    goal.done_at = datetime.now()
+
+
+def unseen_reached_goals(s: Session, user_id: int) -> list[Goal]:
+    giro = get_account(s, user_id, "giro")
+    return [g for g in list_goals(s, user_id) if g.reached_seen_at is None and goal_reached(g, giro)]

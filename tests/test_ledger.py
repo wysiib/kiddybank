@@ -6,7 +6,7 @@ from sqlmodel import Session, select
 
 from app import ledger, market
 from app.ledger import LedgerError
-from app.models import FestgeldProduct, PriceHistory, RecurringRule, Transaction, make_engine
+from app.models import FestgeldProduct, Goal, PriceHistory, RecurringRule, Transaction, make_engine
 
 D0 = date(2026, 1, 1)
 
@@ -229,3 +229,71 @@ def test_first_run_picks_chosen_weekday_and_day_of_month():
     assert ledger.first_run("monthly", 20, wed) == date(2026, 9, 20)
     assert ledger.first_run("monthly", 16, wed) == date(2026, 10, 16)
     assert ledger.first_run("monthly", 5, date(2026, 12, 30)) == date(2027, 1, 5)
+
+
+JPEG = b"\xff\xd8\xff\xe0" + b"x" * 100
+
+
+def make_goal(s, user, **kw):
+    args = {"name": "Lego", "emoji": "🧸", "target_cents": 500, "photo": None, **kw}
+    return ledger.create_goal(s, user.id, **args)
+
+
+def test_goal_validation_and_photo_roundtrip(s, kids):
+    mia, _ = kids
+    with pytest.raises(LedgerError, match="err.amount"):
+        make_goal(s, mia, target_cents=0)
+    with pytest.raises(LedgerError, match="err.goal_empty"):
+        make_goal(s, mia, name="  ")
+    with pytest.raises(LedgerError, match="err.photo_type"):
+        make_goal(s, mia, photo=b"GIF89a")
+    with pytest.raises(LedgerError, match="err.photo_size"):
+        make_goal(s, mia, photo=JPEG + b"x" * ledger.MAX_PHOTO_BYTES)
+
+    g = make_goal(s, mia, name="", photo=JPEG)  # a photo alone is enough
+    s.expire_all()  # force a real read back from SQLite
+    assert s.get(Goal, g.id).photo == JPEG
+
+
+def test_goal_limit_counts_only_active_goals(s, kids):
+    mia, tom = kids
+    goals = [make_goal(s, mia) for _ in range(ledger.MAX_ACTIVE_GOALS)]
+    with pytest.raises(LedgerError, match="err.goal_limit"):
+        make_goal(s, mia)
+    make_goal(s, tom)  # limit is per kid
+
+    fund(s, giro(s, mia), 500)
+    ledger.finish_goal(goals[0], giro(s, mia))
+    make_goal(s, mia)  # a finished goal frees a slot
+
+
+def test_goal_progress_reached_and_finish(s, kids):
+    mia, _ = kids
+    g = make_goal(s, mia)
+    assert ledger.goal_progress(g, giro(s, mia)) == 0
+
+    fund(s, giro(s, mia), 250)
+    assert ledger.goal_progress(g, giro(s, mia)) == 50
+    assert not ledger.goal_reached(g, giro(s, mia))
+    with pytest.raises(LedgerError, match="err.goal_not_reached"):
+        ledger.finish_goal(g, giro(s, mia))
+
+    fund(s, giro(s, mia), 300)  # 550 of 500
+    assert ledger.goal_progress(g, giro(s, mia)) == 100  # capped
+    assert ledger.goal_reached(g, giro(s, mia))
+    assert ledger.unseen_reached_goals(s, mia.id) == [g]
+
+    ledger.mark_seen(s, mia.id)
+    assert ledger.unseen_reached_goals(s, mia.id) == []  # celebrated once
+
+    ledger.finish_goal(g, giro(s, mia))
+    assert g.done_at and not ledger.goal_reached(g, giro(s, mia))
+    assert ledger.goal_progress(g, giro(s, mia)) == 100
+
+
+def test_goal_already_affordable_has_no_celebration(s, kids):
+    mia, _ = kids
+    fund(s, giro(s, mia), 1000)
+    g = make_goal(s, mia)
+    assert ledger.goal_reached(g, giro(s, mia))
+    assert ledger.unseen_reached_goals(s, mia.id) == []

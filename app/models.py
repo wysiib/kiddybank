@@ -57,6 +57,20 @@ class Transaction(SQLModel, table=True):
     seen_at: datetime | None = None  # drives the celebration screens
 
 
+class Goal(SQLModel, table=True):
+    """Savings goal. Progress is derived from the Giro balance; nothing is reserved."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    name: str = ""
+    emoji: str = "🎯"
+    target_cents: int
+    photo: bytes | None = None  # JPEG, shrunk in the browser; kept in the DB so it stays the one file to back up
+    created_at: datetime
+    reached_seen_at: datetime | None = None  # celebration dismissed
+    done_at: datetime | None = None  # kid tapped "Ziel geschafft!"
+
+
 class RecurringRule(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     from_account_id: int | None = Field(default=None, foreign_key="account.id")
