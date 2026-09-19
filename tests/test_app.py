@@ -369,6 +369,10 @@ def test_cash_in_and_out_need_parent_pin(family):
     assert "Bleibt auf dem Konto" in r.text and "Geht raus" in r.text and "7,00 €" in r.text
     assert r.text.count('<i class="coin"></i>') == 10 and r.text.count("coin-ghost") == 1  # 7 stay, 3 leave, 1 interest coin lost
     assert "Große Münze = 1,00 €" in r.text
+    half = family.post("/bar/abheben/pruefen", data={"cents": 250}).text  # half a coin: still 10 coins for 10,00 €
+    assert half.count('<i class="coin"></i>') == 10
+    stay, go = half.split("Bleibt auf dem Konto")[0], half.split("Geht raus")[0]
+    assert stay.count('<i class="coin"></i>') == 7 and go.count('<i class="coin"></i>') == 10  # 7 stay, then 3 more go
     assert "verpasst du" in r.text and "Zinsen" in r.text  # withdrawing costs interest, says by how much
 
     assert "nicht der Code" in confirm(family, "/bar/abheben", cents=300, pin="1111").text  # kid's own PIN

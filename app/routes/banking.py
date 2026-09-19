@@ -152,12 +152,17 @@ def _cash_page(request: Request, s: Session, user: User, kind: str, cents: int |
     lost = ledger.interest_cents(cents or 0, giro.interest_rate_bp, giro.payout_days) if kind == "abheben" else 0
     pic = None
     if cents:  # the confirm step draws what stays, what moves and what interest is given up
-        after = giro.balance_cents + (cents if kind == "einzahlen" else -cents)
-        unit = coins.coin_unit([giro.balance_cents, after])
         small = coins.coin_unit([lost], coins.SMALL_LADDER, coins.SMALL_CAP)
-        pic = {"unit": unit, "small": small, "after": after, "lost": coins.coins(lost, small),
-               "stay": coins.coins(after, unit), "go": coins.coins(cents, unit),
-               "have": coins.coins(giro.balance_cents, unit), "come": coins.coins(cents, unit)}
+        pic = {"small": small, "lost_coins": coins.coins(lost, small)}
+        if kind == "abheben":
+            shown = min(cents, giro.balance_cents)  # the balance may have changed since the check
+            pic["unit"] = coins.coin_unit([giro.balance_cents])
+            pic["after"] = giro.balance_cents - shown
+            pic["stay"], pic["go"] = coins.split(giro.balance_cents, shown, pic["unit"])
+        else:
+            pic["after"] = giro.balance_cents + cents
+            pic["unit"] = coins.coin_unit([pic["after"]])
+            pic["have"], pic["come"] = coins.split(pic["after"], cents, pic["unit"])
     return render(request, "cash.html", user=user, giro=giro, kind=kind, cents=cents, pic=pic,
                   lost=lost, error=error, tok=issue_token(request, "cash") if cents else None)
 

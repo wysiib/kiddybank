@@ -93,3 +93,12 @@ def test_slots_fill_partly():
     assert html.count("slot-on") == 6 and html.count("slot-part") == 1 and "--fill: 40%" in html
     assert render_macro("slots", 100).count("slot-on") == 10
     assert web.templates.env.filters["compact"](5) == "5 Cent" and web.templates.env.filters["compact"](150) == "1,50 €"
+
+
+def test_split_coins_always_add_up_to_the_total():
+    assert coins.split(1000, 250, 100) == (7, 3)  # 2.5 + 7.5 would be 3 + 8 coins: the rest gives one back
+    assert coins.split(1200, 500, 200) == (3, 3)
+    assert coins.split(1000, 0, 100) == (10, 0)
+    assert coins.split(1000, 1000, 100) == (0, 10)
+    assert coins.split(1000, 960, 100) == (1, 9)  # the last 40 cents keep a coin
+    assert coins.split(150, 50, 100) == (1, 1)

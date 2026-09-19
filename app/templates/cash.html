@@ -23,7 +23,7 @@
   <div class="grid grid-cols-2 items-end gap-3">
     <div class="col">{{ stack('big', pic.stay, label=pic.after|money) }}<b>{{ pic.after|money }}</b>{{ t('cash.stays') }}</div>
     <div class="leave col">
-      {% if lost %}{{ stack('small', 0, ghost=pic.lost, tone='gold', label=lost|compact) }}{% endif %}
+      {% if lost %}{{ stack('small', 0, ghost=pic.lost_coins, tone='gold', label=lost|compact) }}{% endif %}
       {{ stack('big', pic.go, label=cents|money) }}<b>{{ cents|money }}</b>{{ t('cash.leaves') }}
     </div>
   </div>

@@ -19,6 +19,15 @@ def coins(cents: int, unit: int) -> int:
     return min(MAX_COINS, max(1, (cents + unit // 2) // unit))
 
 
+def split(total: int, part: int, unit: int) -> tuple[int, int]:
+    """(rest, part) coins for `total` cents split into `part` and the remainder: the two always add up to the coins of the total, and each positive share keeps at least one coin when the total has two or more."""
+    whole = coins(total, unit)
+    first = coins(part, unit)
+    if part > 0 and whole >= 2:
+        first = max(1, min(first, whole - (1 if total - part > 0 else 0)))
+    return whole - first, first
+
+
 def coin_unit(amounts, ladder: tuple[int, ...] = BIG_LADDER, cap: int = BIG_CAP) -> int:
     """Cents one coin is worth in a scene: the smallest ladder step at which the biggest amount fits in `cap` coins."""
     top = max(amounts, default=0)
