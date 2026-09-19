@@ -45,9 +45,7 @@ logic. They `flush` but never `commit`, and raise `LedgerError("i18n.key")`.
 | `POST /gesehen` (existing) | "Toll!" now also sets `reached_seen_at` on reached goals, so one celebration screen has one dismiss |
 | `GET /ziele/{id}/bild` | Photo bytes. Owner or a parent, else 404 |
 
-Home (`home.html`): a Sparziele tile like the Festgeld tile, showing the nearest active goal's bar.
-Reached-and-unseen goals show the existing pink confetti screen: `_celebration.html` gets a `goal`
-event type next to `zins` / `dauerauftrag`, with the goal photo and "Du hast dein Ziel erreicht: {name}!".
+Home (`home.html`): a card with the nearest active goal's picture and bar (a plain "Sparziele" tile with the 🎯 emoji when the kid has no active goal); reached-and-unseen goals show the existing pink confetti screen. `_celebration.html` has a `goal` event type next to `zins` / `dauerauftrag`, showing the goal picture, "Du hast dein Ziel erreicht!" (`cel.goal`), and the goal name on its own line when there is one.
 
 Parents: `/eltern` lists each kid's goals read-only (photo, name, target, progress).
 
@@ -60,8 +58,7 @@ Parents: `/eltern` lists each kid's goals read-only (photo, name, target, progre
   (`err.photo_type`). Ignore filename and client content type. Always serve as `image/jpeg` with
   `X-Content-Type-Options: nosniff` and `Cache-Control: private, no-cache`.
 - Stored as a BLOB, so `kiddybank.db` stays the single file to back up.
-- `sw.js` needs no change: it only caches navigations and `/static/`, so photo GETs are never cached
-  and a shared tablet cannot leak them.
+- photo GETs are never cached by `sw.js` (it only caches navigations and `/static/`), so a shared tablet cannot leak them; separately, Task 5 bumped the `ASSETS` cache to `kb-assets-v2` and made `activate` delete older caches so installed PWAs pick up the new `app.js` and `app.css`.
 - `# ponytail:` comment at the validation: JPEG only, no Pillow. Add Pillow if other formats or
   server-side resizing are ever needed.
 - Optional delight: the photo is grayscale at 0 % and full colour at 100 %, via inline CSS

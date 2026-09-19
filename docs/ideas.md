@@ -4,7 +4,7 @@ Ideas from the 2026-09-19 review, not yet designed. Pick one, then brainstorm it
 Sparziele (see `docs/superpowers/specs/`). Check each against the product constraints in `CLAUDE.md`
 (kid-sized lesson sentence, no sound, no Spar account, rates parent-configurable, all text via `t()`).
 
-Done or in progress: **Sparziele** (spec committed, implementation plan pending).
+Done: **Sparziele** (spec and plan in `docs/superpowers/`).
 
 ## Training wheels
 
