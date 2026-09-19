@@ -1,12 +1,14 @@
 {% extends "base.html" %}
 {% block content %}
 <h1 class="text-center text-4xl font-extrabold">{{ t('login.who') }}</h1>
-<div class="grid grid-cols-2 gap-4">
-  {% for u in users %}
-  <a href="/login/{{ u.id }}" class="tile min-h-44">
+{% for who, min_h in (('child', 'min-h-44'), ('parent', 'min-h-32')) %}
+<div class="grid grid-cols-2 gap-4{{ ' mt-12' if who == 'parent' }}">
+  {% for u in users if u.role == who %}
+  <a href="/login/{{ u.id }}" class="tile {{ min_h }}">
     <span class="text-7xl">{{ u.avatar }}</span>
     {{ u.name }}
   </a>
   {% endfor %}
 </div>
+{% endfor %}
 {% endblock %}
