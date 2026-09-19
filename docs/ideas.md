@@ -8,7 +8,7 @@ Done: **PIN lockout** (five wrong PINs lock a user for five minutes, login and c
 
 Rejected: **Geld-Wunsch an Mama/Papa**. A real bank doesn't take wishes for money, so we don't teach that.
 
-In progress: **Coin visuals** (explanations as coins, calendars and slots instead of sentences and bars). Spec and mockup in `docs/superpowers/specs/2026-09-19-coin-visuals-*`. Left in the backlog from it: celebration animations and the Dauerauftrag loop.
+Done: **Coin visuals** (explanations as coins, calendars and slots instead of sentences and bars). Spec and mockup in `docs/superpowers/specs/2026-09-19-coin-visuals-*`. Left in the backlog from it: celebration animations and the Dauerauftrag loop.
 
 ## Training wheels
 

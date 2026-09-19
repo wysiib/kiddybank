@@ -34,10 +34,14 @@ a cap. The unit is printed once per scene ("1 Münze = 2 €").
 - All stacks in one scene share one unit, so stacks stay comparable (the three Festgeld offers do).
   A scene may have one big and one small unit (week card).
 
-Time works the same way (`time_unit(days)`): up to 31 days a unit is a day, up to 91 days a week,
-beyond that a month of 30 days. A fractional last unit is drawn smaller (never below about half
+Time works the same way (`time_unit(days, cap=13)`): the unit is the smallest of a day, a week and a
+month (30 days) that keeps the longest duration in the scene within 13 units. A fractional last unit is drawn smaller (never below about half
 size, so a single spare day stays visible). All tiles in a scene share the unit, printed as
 "1 Kalender = 1 Woche".
+
+Paired stacks (stays/leaves on Abheben, stays/arrives on the transfer confirm, existing/arriving on
+Einzahlen) come from `coins.split(total, part, unit) -> (rest, part)`, so they always add up to the coins
+of one total; each positive share keeps at least one coin when the total has two or more.
 
 Ceiling: above the top of the ladders a stack just shows the cap and the printed amount carries
 the rest. Real pocket money is nowhere near it.
@@ -51,17 +55,17 @@ the rest. Real pocket money is nowhere near it.
 | Festgeld ready | 🎁, big total, sentence | Silver stack and gold stack side by side, total, "Abholen!" |
 | Abheben confirm (`cash.html`) | Vorher/Nachher line, interest sentence | Stack splits into "Bleibt" and "Geht raus"; a dashed interest coin hangs over what leaves. Vorher/Nachher line is dropped (the amounts sit under the stacks); `cash.out.interest*` sentences stay because they carry the number and period |
 | Einzahlen confirm | Vorher/Nachher line | Same split scene: existing stack plus dashed arriving coins |
-| Überweisen confirm (`transfer_confirm.html`) | Vorher/Nachher line | Three coins hop from your stack to the receiver's stack (always three, the amount is in the stacks); receiver shows the arriving coins dashed |
+| Überweisen confirm (`transfer_confirm.html`) | Vorher/Nachher line | Three coins hop from your stack to the receiver's side (always three, the amount is in the stacks). The receiver side draws only the arriving coins, dashed, never the receiver's balance (privacy; a deliberate deviation from the mockup) |
 | Home Giro card (`home.html`) | Interest sentence | Day pips counting to the next payout (unit from `time_unit(payout_days)`), ending in a coin with the expected cents; sentence stays |
 | Home week card | Numbers in green/red | Coin rows per line (big unit for euros, small unit for interest), numbers stay |
-| Sparziele bar (`_goal.html` `bar()`, used by home, goals, parent) | Percent bar | Ten slots, each a tenth of the price, the next one partly filled; goal picture at the end; "Ein Platz = X €". `pct` comes from the existing `goal_progress` |
+| Sparziele bar (`_goal.html` `bar()`, used by home, goals, parent) | Percent bar | Ten slots, each a tenth of the price, the next one partly filled; "Ein Platz = X €". The goal picture stays where it was (the slots replace the bar in place; a deliberate deviation from the mockup). `pct` comes from the existing `goal_progress`. The kid sentence `goal.lesson` now reads "Die Plätze zeigen, wie nah du schon dran bist." (was "Der Balken zeigt...") |
 | `err.insufficient` (transfer, Festgeld opening) | One sentence | Sentence plus two stacks, "Du hast" and "Du brauchst", the missing coins dashed |
 
 ## Code shape
 
 - `app/coins.py` (leaf, no DB): `coin_unit(amounts, ladder, cap)`, `coins(cents, unit)` (count with the
-  min-one rule), `time_unit(days)`, `time_units(days, unit)` (float, for the smaller last calendar), `slots(pct)`
-  -> `(full, part_pct)`. Registered as Jinja globals beside `t` and the filters in `web.py`.
+  min-one rule), `time_unit(days)`, `time_units(days, unit)` (float, for the smaller last calendar), `slot_fill(pct, n=10)`
+  -> `(full, part_pct)`, `split(total, part, unit)`. Registered as Jinja globals beside `t` and the filters in `web.py`.
 - `app/templates/_coins.html` macros: `stack(kind, n, ghost=0)`, `calendars(units)`, `slots(pct)`,
   `unit_note(...)`. `_towers.html` goes away; `_preview.html` keeps its out-of-band swap but renders the
   new stacks.
@@ -78,7 +82,7 @@ the rest. Real pocket money is nowhere near it.
 ## Testing
 
 - `tests/test_coins.py`: ladder picks the right unit at each cap boundary, a positive amount is at
-  least one coin, `time_units` fractions and `slots` rounding (6.4 -> 6 full, 40 % part).
+  least one coin, `time_units` fractions and `slot_fill` rounding (6.4 -> 6 full, 40 % part).
 - `tests/test_app.py`: the affected pages render for a family fixture (offers, locked, ready, Abheben
   and Überweisen confirm, home with a goal). Assert on the printed unit note, not on markup details.
 - Existing i18n coverage test must still pass; new keys must be used.
@@ -90,3 +94,11 @@ the rest. Real pocket money is nowhere near it.
 3. Week card and the insufficient-funds picture.
 
 Each step ships on its own with tests, rebuilt `app.css`, and `ruff` clean.
+
+## Known limits
+
+- Balances under 1 EUR are below the smallest big-coin unit (1 EUR), so a small remainder can draw as zero
+  coins next to its printed amount.
+- The `err.insufficient` picture is not shown when a cash withdrawal fails at the final PIN step because the
+  balance changed in the meantime.
+- A goal price of 1-4 cent would print "Ein Platz = 0,00 €".
