@@ -366,7 +366,9 @@ def test_cash_in_and_out_need_parent_pin(family):
     login(family, 2, "1111")
 
     r = family.post("/bar/abheben/pruefen", data={"cents": 300})
-    assert "Vorher 10,00 €" in r.text and "Nachher 7,00 €" in r.text
+    assert "Bleibt auf dem Konto" in r.text and "Geht raus" in r.text and "7,00 €" in r.text
+    assert r.text.count('<i class="coin"></i>') == 10 and r.text.count("coin-ghost") == 1  # 7 stay, 3 leave, 1 interest coin lost
+    assert "Große Münze = 1,00 €" in r.text
     assert "verpasst du" in r.text and "Zinsen" in r.text  # withdrawing costs interest, says by how much
 
     assert "nicht der Code" in confirm(family, "/bar/abheben", cents=300, pin="1111").text  # kid's own PIN
@@ -374,7 +376,8 @@ def test_cash_in_and_out_need_parent_pin(family):
     assert "Abgehoben" in confirm(family, "/bar/abheben", cents=300, pin="1234").text
     assert giro_cents(2) == 700
 
-    assert "Nachher 12,00 €" in family.post("/bar/einzahlen/pruefen", data={"cents": 500}).text
+    r = family.post("/bar/einzahlen/pruefen", data={"cents": 500})
+    assert "Danach hast du 12,00 €" in r.text and r.text.count("coin-ghost") == 3 and "Große Münze = 2,00 €" in r.text
     assert "Eingezahlt" in confirm(family, "/bar/einzahlen", cents=500, pin="1234").text
     assert giro_cents(2) == 1200
 

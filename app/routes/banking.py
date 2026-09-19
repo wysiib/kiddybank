@@ -5,7 +5,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from sqlmodel import Session, select
 
-from .. import auth, events, goals, ledger
+from .. import auth, coins, events, goals, ledger
 from ..auth import verify_pin
 from ..i18n import format_money, t
 from ..ledger import LedgerError
@@ -150,7 +150,15 @@ def _cash_page(request: Request, s: Session, user: User, kind: str, cents: int |
         raise HTTPException(404)
     giro = ledger.get_account(s, user.id, "giro")
     lost = ledger.interest_cents(cents or 0, giro.interest_rate_bp, giro.payout_days) if kind == "abheben" else 0
-    return render(request, "cash.html", user=user, giro=giro, kind=kind, cents=cents,
+    pic = None
+    if cents:  # the confirm step draws what stays, what moves and what interest is given up
+        after = giro.balance_cents + (cents if kind == "einzahlen" else -cents)
+        unit = coins.coin_unit([giro.balance_cents, after])
+        small = coins.coin_unit([lost], coins.SMALL_LADDER, coins.SMALL_CAP)
+        pic = {"unit": unit, "small": small, "after": after, "lost": coins.coins(lost, small),
+               "stay": coins.coins(after, unit), "go": coins.coins(cents, unit),
+               "have": coins.coins(giro.balance_cents, unit), "come": coins.coins(cents, unit)}
+    return render(request, "cash.html", user=user, giro=giro, kind=kind, cents=cents, pic=pic,
                   lost=lost, error=error, tok=issue_token(request, "cash") if cents else None)
 
 
