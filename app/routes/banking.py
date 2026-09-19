@@ -123,7 +123,10 @@ def transfer_check(request: Request, to_id: int = Form(...), cents: int = Form(0
             raise LedgerError("err.insufficient")
     except LedgerError as e:
         return _transfer_form(request, s, user, e.args[0])
-    return render(request, "transfer_confirm.html", user=user, src=src, dst=dst, cents=cents,
+    unit = coins.coin_unit([src.balance_cents])  # only the sender's own balance sets the scale, never the receiver's
+    mine, go = coins.split(src.balance_cents, cents, unit)  # what stays + what leaves add up to the sender's stack
+    pic = {"unit": unit, "mine": mine, "go": go}
+    return render(request, "transfer_confirm.html", user=user, src=src, dst=dst, cents=cents, pic=pic,
                   to_name=s.get(User, dst.user_id).name, tok=issue_token(request, "transfer"))
 
 

@@ -76,7 +76,8 @@ STRINGS = {
         "xfer.amount": "Wie viel?",
         "xfer.reset": "Auf null",
         "xfer.confirm": "Wirklich {amount} an {name} schicken?",
-        "xfer.before_after": "Vorher {before} · Nachher {after}",
+        "xfer.stays": "Bleibt bei dir",
+        "xfer.arrives": "Kommt bei {name} an",
         "xfer.lesson": "Bei einer Überweisung geht das Geld von deinem Konto auf das Konto von jemand anderem.",
         "xfer.done": "Geschafft! Das Geld ist angekommen.",
 

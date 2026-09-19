@@ -83,13 +83,23 @@ def test_transfer_confirm_and_insufficient(family):
     assert r.status_code == 400 and "nicht genug Geld" in r.text
 
     r = family.post("/ueberweisen/pruefen", data={**form, "cents": 300})
-    assert "Vorher 10,00 €" in r.text and "Nachher 7,00 €" in r.text
+    assert "Bleibt bei dir" in r.text and "7,00 €" in r.text and "Kommt bei Mama an" in r.text
+    assert r.text.count("coin-ghost") == 3  # the 3 EUR arrive as dashed coins at the receiver
     assert "Geschafft" in confirm(family, "/ueberweisen", cents=300, **form).text
     with Session(web._engine()) as s:
         assert ledger.get_account(s, 1, "giro").balance_cents == 300
 
     own = {"to_id": account_id(2, "giro"), "cents": 100}
     assert family.post("/ueberweisen", data=own).status_code == 403  # can't "transfer" to yourself
+
+
+def test_transfer_confirm_does_not_leak_the_receivers_balance(family):
+    with Session(web._engine()) as s:
+        ledger.get_account(s, 1, "giro").balance_cents = 4242
+        s.commit()
+    login(family, 2, "1111")
+    r = family.post("/ueberweisen/pruefen", data={"to_id": account_id(1, "giro"), "cents": 300})
+    assert "42,42" not in r.text
 
 
 def test_festgeld_flow_and_module_switch(family):

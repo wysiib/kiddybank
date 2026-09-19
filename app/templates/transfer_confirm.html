@@ -1,9 +1,14 @@
 {% extends "base.html" %}
+{% from "_coins.html" import stack %}
 {% block content %}
 <div class="card space-y-4 text-center">
-  <div class="text-7xl">💸</div>
-  <p class="text-3xl font-extrabold">{{ t('xfer.confirm', amount=cents|money, name=to_name) }}</p>
-  <p class="lesson">{{ t('xfer.before_after', before=src.balance_cents|money, after=(src.balance_cents - cents)|money) }}</p>
+  <p class="text-3xl font-extrabold">💸 {{ t('xfer.confirm', amount=cents|money, name=to_name) }}</p>
+  <div class="grid grid-cols-3 items-end">
+    <div class="col">{{ stack('big', pic.mine, label=(src.balance_cents - cents)|money) }}<span class="text-3xl">👛</span><b>{{ (src.balance_cents - cents)|money }}</b>{{ t('xfer.stays') }}</div>
+    <div class="flight" aria-hidden="true"><i class="coin"></i><i class="coin"></i><i class="coin"></i></div>
+    <div class="col">{{ stack('big', 0, ghost=pic.go, label=cents|money) }}<span class="text-3xl">➡️</span><b>{{ cents|money }}</b>{{ t('xfer.arrives', name=to_name) }}</div>
+  </div>
+  <p class="text-sm text-slate-500">{{ t('coin.unit', amount=pic.unit|compact) }}</p>
   <p class="lesson">{{ t('xfer.lesson') }}</p>
 </div>
 <form method="post" action="/ueberweisen" class="grid grid-cols-2 gap-4">
