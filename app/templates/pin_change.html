@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% from "_keypad.html" import keypad %}
+{% block content %}
+<div class="text-center">
+  <div class="text-7xl">🔑</div>
+  <h1 class="text-3xl font-extrabold">{{ t('pin.change.' ~ step) }}</h1>
+  <p class="lesson">{{ t('pin.change.lesson') }}</p>
+</div>
+{% if error %}<p class="error text-center">{{ t(error) }}</p>{% endif %}
+<form method="post" action="{{ action }}" class="space-y-6">
+  {% for name, value in carry.items() %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
+  <input type="hidden" name="pin" value="">
+  {{ keypad('/home', shake=error) }}
+</form>
+{% endblock %}

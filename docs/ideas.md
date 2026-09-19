@@ -4,7 +4,7 @@ Ideas from the 2026-09-19 review, not yet designed. Pick one, then brainstorm it
 Sparziele (see `docs/superpowers/specs/`). Check each against the product constraints in `CLAUDE.md`
 (kid-sized lesson sentence, no sound, no Spar account, rates parent-configurable, all text via `t()`).
 
-Done: **PIN lockout** (five wrong PINs lock a user for five minutes, login and cash desk), **Sparziele** (spec and plan in `docs/superpowers/`), **Einzahlen/Abheben** (kid picks an amount, a parent confirms with their PIN).
+Done: **PIN lockout** (five wrong PINs lock a user for five minutes, login and cash desk), **Sparziele** (spec and plan in `docs/superpowers/`), **Einzahlen/Abheben** (kid picks an amount, a parent confirms with their PIN), **PIN change** (kid changes their own PIN with the old one at `/pin`; a parent resets a kid's PIN in `/eltern`, which also lifts a lockout). Still open: a parent who forgets their own PIN has no recovery path.
 
 Rejected: **Geld-Wunsch an Mama/Papa**. A real bank doesn't take wishes for money, so we don't teach that.
 

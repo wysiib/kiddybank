@@ -509,3 +509,50 @@ def test_statement_names_every_kind_of_booking(family):
     for text in ("In die Schatztruhe", "Aus der Schatztruhe", "Überweisung an Mama", "Eltern haben Geld eingezahlt",
                  "Aktie gekauft (BIKE)", "Aktie verkauft (BIKE)", "Zinsen"):
         assert text in page, text
+
+
+def test_kid_changes_own_pin_in_three_steps(family):
+    login(family, 2, "1111")
+    assert "jetzigen" in family.get("/pin").text
+    assert "neuen" in family.post("/pin/neu", data={"pin": "1111"}).text
+    assert "Noch einmal" in family.post("/pin/pruefen", data={"old": "1111", "pin": "2222"}).text
+    assert "gilt jetzt" in family.post("/pin/aendern", data={"old": "1111", "new": "2222", "pin": "2222"}).text
+    assert "Oh nein" in login(family, 2, "1111").text
+    assert login(family, 2, "2222").headers["location"] == "/"
+
+
+def test_pin_change_refuses_wrong_old_mismatch_and_same_pin(family):
+    login(family, 2, "1111")
+    assert "nicht dein Code" in family.post("/pin/neu", data={"pin": "0000"}).text
+    assert "gleich" in family.post("/pin/aendern", data={"old": "1111", "new": "2222", "pin": "3333"}).text
+    assert "alter Code" in family.post("/pin/pruefen", data={"old": "1111", "pin": "1111"}).text
+    assert "4 Zahlen" in family.post("/pin/pruefen", data={"old": "1111", "pin": "12"}).text
+    assert "nicht dein Code" in family.post("/pin/aendern", data={"old": "0000", "new": "2222", "pin": "2222"}).text  # forged last step
+    assert login(family, 2, "1111").headers["location"] == "/"  # nothing changed
+
+
+def test_pin_change_counts_wrong_old_pins_toward_the_lockout(family):
+    login(family, 2, "1111")
+    for _ in range(auth.MAX_PIN_FAILURES):
+        assert "nicht dein Code" in family.post("/pin/neu", data={"pin": "0000"}).text
+    assert "Zu oft falsch" in family.post("/pin/neu", data={"pin": "1111"}).text
+
+
+def test_pin_change_is_kid_only(family):
+    assert family.get("/pin").headers["location"] == "/eltern"
+
+
+def test_parent_resets_kid_pin_and_lockout(family):
+    with Session(web._engine()) as s:
+        s.get(User, 2).locked_until = datetime.now() + timedelta(minutes=5)
+        s.commit()
+    assert family.post("/eltern/kinder/2/pin", data={"pin": "5555"}).headers["location"] == "/eltern"
+    assert "Oh nein" in login(family, 2, "1111").text
+    assert login(family, 2, "5555").headers["location"] == "/"
+
+
+def test_parent_pin_reset_rejects_bad_input_and_non_kids(family):
+    assert "4 Zahlen" in family.post("/eltern/kinder/2/pin", data={"pin": "12"}).text
+    assert family.post("/eltern/kinder/1/pin", data={"pin": "5555"}).status_code == 404  # a parent is not a kid
+    assert login(family, 2, "1111").headers["location"] == "/"
+    assert family.post("/eltern/kinder/2/pin", data={"pin": "5555"}).status_code == 403  # kids can't reset

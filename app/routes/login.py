@@ -7,10 +7,11 @@ from fastapi.responses import FileResponse
 from sqlmodel import Session, select
 
 from .. import auth, festgeld, ledger
-from ..auth import verify_pin
+from ..auth import hash_pin, verify_pin
+from ..i18n import t
 from ..ledger import LedgerError
 from ..models import User
-from ..web import BASE, db, get_today, redirect, render, sign_in, valid_pin
+from ..web import BASE, db, get_today, kid, redirect, render, sign_in, valid_pin
 
 router = APIRouter()
 
@@ -77,6 +78,65 @@ def pin_submit(request: Request, uid: int, pin: str = Form(...), s: Session = db
     auth.pin_ok(user)
     sign_in(request, user)
     return redirect("/")
+
+
+# --- kid: change the own PIN -------------------------------------------------------------------
+# Three keypad screens, no server state: the old PIN (and later the new one) travels in hidden fields and the
+# last step checks the old PIN again, so a forged request cannot skip it.
+
+PIN_STEPS = {"old": "/pin/neu", "new": "/pin/pruefen", "again": "/pin/aendern"}
+
+
+def _pin_page(request: Request, user: User, step: str, error: str | None = None, **carry: str):
+    return render(request, "pin_change.html", who=user, step=step, action=PIN_STEPS[step], carry=carry, error=error)
+
+
+def _old_pin_error(user: User, old: str) -> str | None:
+    if auth.locked(user):
+        return "err.locked"
+    if not verify_pin(old, user.pin_hash):
+        auth.pin_failed(user)
+        return "login.pin.wrong"
+    auth.pin_ok(user)
+    return None
+
+
+@router.get("/pin")
+def pin_change_form(request: Request, user: User = Depends(kid)):
+    return _pin_page(request, user, "old")
+
+
+@router.post("/pin/neu")
+def pin_change_old(request: Request, pin: str = Form(...), user: User = Depends(kid)):
+    if error := _old_pin_error(user, pin):
+        return _pin_page(request, user, "old", error)
+    return _pin_page(request, user, "new", old=pin)
+
+
+@router.post("/pin/pruefen")
+def pin_change_new(request: Request, old: str = Form(...), pin: str = Form(...), user: User = Depends(kid)):
+    try:
+        valid_pin(pin)
+        if pin == old:
+            raise LedgerError("pin.change.same")
+    except LedgerError as e:
+        return _pin_page(request, user, "new", e.args[0], old=old)
+    return _pin_page(request, user, "again", old=old, new=pin)
+
+
+@router.post("/pin/aendern")
+def pin_change_do(request: Request, old: str = Form(...), new: str = Form(...), pin: str = Form(...),
+                  user: User = Depends(kid)):
+    if error := _old_pin_error(user, old):
+        return _pin_page(request, user, "old", error)
+    if pin != new:
+        return _pin_page(request, user, "new", "pin.change.mismatch", old=old)
+    try:
+        valid_pin(new)
+    except LedgerError as e:
+        return _pin_page(request, user, "new", e.args[0], old=old)
+    user.pin_hash = hash_pin(new)
+    return render(request, "done.html", user=user, emoji="🔑", msg=t("pin.change.done"), lesson=t("pin.change.lesson"))
 
 
 @router.post("/logout")

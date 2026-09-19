@@ -39,6 +39,14 @@
       {{ module_boxes(k.festgeld_enabled, k.stocks_enabled) }}
       <button class="btn btn-alt">{{ t('app.save') }}</button>
     </form>
+    <details>
+      <summary class="cursor-pointer font-bold">🔑 {{ t('par.pin.reset') }}</summary>
+      <form method="post" action="/eltern/kinder/{{ k.id }}/pin" class="mt-3 flex flex-wrap items-end gap-3">
+        <label class="block">{{ t('par.pin') }}<input class="input" name="pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" required></label>
+        <button class="btn btn-alt">{{ t('par.pin.reset') }}</button>
+        <p class="lesson w-full">{{ t('par.pin.reset.hint') }}</p>
+      </form>
+    </details>
     {% if goals[k.id] %}
     <div class="space-y-2">
       <h3 class="font-bold">🎯 {{ t('par.goals') }}</h3>

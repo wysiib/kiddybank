@@ -44,5 +44,6 @@
   {% if festgeld_visible %}
   <a href="/festgeld" class="tile"><span class="text-6xl">🧰</span>{{ t('acct.festgeld') }}{% if deposits %} ({{ deposits|length }}){% endif %}</a>
   {% endif %}
+  <a href="/pin" class="tile"><span class="text-6xl">🔑</span>{{ t('home.pin') }}</a>
 </div>
 {% endblock %}

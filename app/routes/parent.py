@@ -5,7 +5,8 @@ from datetime import date
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from sqlmodel import Session, select
 
-from .. import festgeld, goals, ledger
+from .. import auth, festgeld, goals, ledger
+from ..auth import hash_pin
 from ..ledger import LedgerError
 from ..models import Account, FestgeldProduct, RecurringRule, User
 from ..web import (
@@ -86,6 +87,18 @@ def update_kid(request: Request, uid: int, rate: str = Form(""), period: int = F
     k.festgeld_enabled, k.stocks_enabled = festgeld is not None, stocks is not None
     if avatar in AVATARS:
         k.avatar = avatar
+    return redirect("/eltern")
+
+
+@router.post("/eltern/kinder/{uid}/pin")
+def reset_kid_pin(request: Request, uid: int, pin: str = Form(...), user: User = Depends(parent), s: Session = db):
+    k = child_or_404(s, uid)
+    try:
+        valid_pin(pin)
+    except LedgerError as e:
+        return _parent_page(request, s, user, e.args[0])
+    k.pin_hash = hash_pin(pin)
+    auth.pin_ok(k)  # also lifts a lockout
     return redirect("/eltern")
 
 
