@@ -213,3 +213,20 @@ def test_goal_finish_and_delete(family):
 
     assert family.post("/ziele/1/loeschen").status_code == 303
     assert "Lego" not in family.get("/ziele").text
+
+
+def test_goal_home_card_and_celebration_once(family):
+    login(family, 2, "1111")
+    assert "🎯" in family.get("/home").text and "/ziele" in family.get("/home").text  # tile before any goal
+    add_goal(family, cents=1500)  # 10 EUR of 15 EUR
+    home = family.get("/home").text
+    assert "Lego" in home and "dein Ziel erreicht" not in home
+
+    login(family, 1, "1234")
+    family.post("/eltern/buchen", data={"account_id": account_id(2, "giro"), "amount": "5,00"})
+    login(family, 2, "1111")
+    assert "dein Ziel erreicht" in family.get("/home").text
+    assert "dein Ziel erreicht" in family.get("/home").text  # looking is not enough
+    family.post("/gesehen")
+    assert "dein Ziel erreicht" not in family.get("/home").text
+    assert "Ziel geschafft" in family.get("/ziele").text  # still reachable, button waits

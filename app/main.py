@@ -210,11 +210,12 @@ def service_worker():
 # --- kid: home + statement ---------------------------------------------------------------------
 
 def _events(s: Session, user: User) -> list[dict]:
-    """Unseen interest / allowance, summed per kind, for the celebration screen."""
+    """Unseen interest / allowance (summed per kind) and reached goals, for the celebration screen."""
     totals: dict[str, int] = {}
     for tx in ledger.unseen_events(s, user.id):
         totals[tx.type] = totals.get(tx.type, 0) + tx.amount_cents
-    return [{"type": k, "cents": v} for k, v in totals.items()]
+    return [{"type": k, "cents": v} for k, v in totals.items()] + [
+        {"type": "goal", "goal": g} for g in ledger.unseen_reached_goals(s, user.id)]
 
 
 def _rate(acc: Account) -> dict:
@@ -225,7 +226,8 @@ def _rate(acc: Account) -> dict:
 def home(request: Request, user: User = Depends(kid), s: Session = Depends(get_session)):
     giro = ledger.get_account(s, user.id, "giro")
     deposits = [a for a in own_accounts(s, user, "festgeld") if not a.collected_at]
-    return render(request, "home.html", user=user, giro=giro, deposits=deposits,
+    cards = _goal_cards([g for g in ledger.list_goals(s, user.id) if not g.done_at], giro)
+    return render(request, "home.html", user=user, giro=giro, deposits=deposits, top=max(cards, key=lambda c: c["pct"], default=None),
                   events=_events(s, user), rate=_rate, festgeld_visible=user.festgeld_enabled or bool(deposits))
 
 

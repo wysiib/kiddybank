@@ -42,7 +42,7 @@ logic. They `flush` but never `commit`, and raise `LedgerError("i18n.key")`.
 | `POST /ziele` | Create (multipart: `name`, `emoji`, `cents`, optional `photo`). On `LedgerError`: `s.rollback()`, re-render with the key |
 | `POST /ziele/{id}/loeschen` | Delete an unfinished goal |
 | `POST /ziele/{id}/geschafft` | Only if reached; sets `done_at` |
-| `POST /ziele/{id}/gesehen` | Sets `reached_seen_at` (dismisses the celebration) |
+| `POST /gesehen` (existing) | "Toll!" now also sets `reached_seen_at` on reached goals, so one celebration screen has one dismiss |
 | `GET /ziele/{id}/bild` | Photo bytes. Owner or a parent, else 404 |
 
 Home (`home.html`): a Sparziele tile like the Festgeld tile, showing the nearest active goal's bar.

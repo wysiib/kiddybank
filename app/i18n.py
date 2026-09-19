@@ -40,6 +40,8 @@ STRINGS = {
         "cel.zins.why": "Die Bank bezahlt dich dafür, dass dein Geld bei ihr bleibt. Das nennt man Zinsen.",
         "cel.dauerauftrag": "Taschengeld ist da! {amount}",
         "cel.dauerauftrag.why": "Dein Taschengeld kommt regelmäßig von allein. Das nennt man Dauerauftrag.",
+        "cel.goal": "Du hast dein Ziel erreicht!",
+        "cel.goal.why": "Du hast so lange gespart, bis genug Geld da war. Das nennt man ein Sparziel.",
 
         # statement
         "stmt.title": "Kontoauszug",

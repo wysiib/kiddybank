@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_goal.html" import visual, bar %}
 {% block content %}
 {% if events %}{% include "_celebration.html" %}{% endif %}
 <h1 class="text-4xl font-extrabold">{{ user.avatar }} {{ t('home.hello', name=user.name) }}</h1>
@@ -13,8 +14,19 @@
   <p class="lesson">{{ t('home.rate', rate=r.rate, cents=r.cents) }}</p>
 </a>
 
+{% if top %}
+<a href="/ziele" class="card flex items-center gap-4">
+  {{ visual(top.goal, top.pct, 'h-20 w-20') }}
+  <div class="flex-1 space-y-2">
+    <div class="font-bold">🎯 {{ top.goal.name or t('goal.title') }}</div>
+    {{ bar(top.pct) }}
+  </div>
+</a>
+{% endif %}
+
 <div class="grid grid-cols-2 gap-4">
   <a href="/ueberweisen" class="tile"><span class="text-6xl">💸</span>{{ t('home.transfer') }}</a>
+  {% if not top %}<a href="/ziele" class="tile"><span class="text-6xl">🎯</span>{{ t('goal.title') }}</a>{% endif %}
   {% if festgeld_visible %}
   <a href="/festgeld" class="tile"><span class="text-6xl">🧰</span>{{ t('acct.festgeld') }}{% if deposits %} ({{ deposits|length }}){% endif %}</a>
   {% endif %}
