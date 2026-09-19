@@ -1,0 +1,50 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+Kinderbank: a self-hosted banking simulation for kids aged 5-8, meant to teach how banking works. FastAPI + SQLModel + SQLite, server-rendered Jinja2 with HTMX and Tailwind, installable as a PWA.
+
+## Commands
+
+```sh
+uv sync                                   # install deps (uv.lock is committed)
+uv run uvicorn app.main:app --reload      # run; first visit to / redirects to /setup to create the parent
+uv run pytest                             # all tests
+uv run pytest tests/test_ledger.py::test_name   # single test
+bin/tailwindcss -i app/tailwind.css -o app/static/app.css --minify   # rebuild CSS after touching templates
+```
+
+- `bin/tailwindcss` is the Tailwind v4 standalone binary, gitignored (`bin/`). Download it yourself if missing. `app/static/app.css` is its **committed** output, so rebuild and commit it whenever you add utility classes to a template. Custom component classes (`.btn`, `.tile`, `.card`, ...) live in `app/tailwind.css`.
+- No linter or formatter is configured.
+- Runtime state that is gitignored: `kiddybank.db` (override with `KIDDYBANK_DB`) and `.session_secret` (override with `KIDDYBANK_SECRET`).
+
+## Architecture
+
+Layering: `main.py` (routes, form parsing, view models) → `ledger.py` / `market.py` (all money logic) → `models.py` (SQLModel tables + engine). `i18n.py` and `auth.py` are leaf helpers.
+
+**Ledger rules (`ledger.py`)** — these span several files, so read them before touching money code:
+- Money is integer cents; rates are integer basis points (`parse_euro` / `parse_percent` in `main.py` convert user text).
+- Ledger functions `flush` but never `commit`. The transaction belongs to the request: `get_session` commits on success and rolls back on exception. Routes that catch a `LedgerError` must call `s.rollback()` themselves before re-rendering.
+- Errors are `LedgerError("i18n.key")`, never sentences; routes pass the key to the template.
+- Every booking goes through `post()`. A `None` side of a `Transaction` is the virtual parent/bank/market. Statement balances are derived backwards from `Account.balance_cents`, not stored per row.
+- **Interest and pocket money are lazy.** There is no scheduler. `ensure_up_to_date()` (interest accrual + due `RecurringRule`s) must run before *any* balance change on an account, so interest is computed on the balance that actually held. The `kid` and `parent` dependencies in `main.py` call `catch_up_user` on every request. Interest accrues into `Account.interest_accrued` (exact remainder, unit 1/(10000·365) cent) and is only booked weekly (`INTEREST_PAYOUT_DAYS`).
+- Festgeld deposits are separate `Account` rows (`type="festgeld"`) that snapshot name, rate and maturity from a `FestgeldProduct` at opening. They are never auto-paid: the kid collects via `collect_festgeld` ("Abholen") after maturity. Products are deactivated, never deleted. Collecting is deliberately not gated on the per-kid `festgeld_enabled` switch.
+- "Today" comes from the `get_today` dependency, not `date.today()`, so tests can move the clock (`client.clock["today"]`). Use the dependency in new routes.
+
+**Stocks:** `market.py` (seeded random walk, caught up lazily per day) and the `Stock`/`PriceHistory`/`Holding` tables exist and are tested, but no route or template exposes them yet. Only the per-kid `stocks_enabled` flag is wired into the parent UI.
+
+**SQLite setup (`make_engine`)** — WAL, foreign keys on, and every transaction starts with `BEGIN IMMEDIATE` so writers serialize. This matters because GET requests write (lazy catch-up). Tables are created with `create_all`; there is no migration tool, so schema changes need a manual migration or a fresh DB.
+
+**Auth** — profile picker + 4-digit PIN (scrypt), signed session cookie holding `uid`. Roles are `parent` / `child`: `Depends(kid)` redirects parents to `/eltern`, `Depends(parent)` returns 403 for kids. Kid routes must scope every account lookup to `user.id` (see `statement`, `_resolve`, `festgeld_collect`).
+
+**Frontend** — no JS build step. Routes use German paths (`/ueberweisen`, `/eltern`, `/konto/{id}`, `/festgeld/.../abholen`). `app/static/app.js` is the amount stepper and PIN keypad (kids tap buttons instead of typing); HTMX is vendored and used for partials like `_preview.html`. `sw.js` is served from `/sw.js` (root scope): cache-first static, network-first pages, never caches POSTs, and wipes cached pages on logout so a shared tablet can't leak balances. Bump the cache version constants there if you change caching behavior.
+
+**Tests** — `tests/test_ledger.py` calls ledger/market functions directly against a temp SQLite DB. `tests/test_app.py` drives real routes with `TestClient`; its `client` fixture points `DB_URL` at a temp file, clears the `_engine` cache and overrides `get_today`; the `family` fixture creates a parent and a kid through the routes.
+
+## Product constraints (decided by the owner, check new features against these)
+
+- All UI text goes through `t()` in `app/i18n.py` (German today, structured for more locales). No hardcoded user-facing strings in routes or templates.
+- **No sound, ever.** Feedback is visual only.
+- Every banking event or screen explains its concept in one kid-sized sentence.
+- Exactly one Giro per kid plus any number of Festgeld deposits. **No Spar/Tagesgeld account.**
+- All interest rates are parent-configurable. Don't hardcode new rates; `DEFAULT_*` constants in `ledger.py` are only seeds.
