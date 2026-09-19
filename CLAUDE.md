@@ -15,7 +15,7 @@ bin/tailwindcss -i app/tailwind.css -o app/static/app.css --minify   # rebuild C
 ```
 
 - `bin/tailwindcss` is the Tailwind v4 standalone binary, gitignored (`bin/`). Download it yourself if missing. `app/static/app.css` is its **committed** output, so rebuild and commit it whenever you add utility classes to a template. Custom component classes (`.btn`, `.tile`, `.card`, ...) live in `app/tailwind.css`.
-- No linter or formatter is configured.
+- `uv run ruff check` (pyflakes + bugbear, config in `pyproject.toml`) runs in CI, as does a check that `app/static/app.css` matches a fresh Tailwind build (pinned to v4.3.3, keep it equal to your local `bin/tailwindcss`). No formatter is configured.
 - Runtime state that is gitignored: `kiddybank.db` (override with `KIDDYBANK_DB`) and `.session_secret` (override with `KIDDYBANK_SECRET`).
 
 ## Architecture

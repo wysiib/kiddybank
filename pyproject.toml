@@ -13,7 +13,11 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pytest", "httpx"]
+dev = [
+    "pytest",
+    "httpx",
+    "ruff>=0.16.8",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -22,3 +26,7 @@ pythonpath = ["."]
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
+
+[tool.ruff.lint]
+select = ["F", "B"]
+ignore = ["B008"]  # FastAPI's Depends() / Form() defaults

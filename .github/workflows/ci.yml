@@ -14,3 +14,10 @@ jobs:
       - uses: astral-sh/setup-uv@v7
       - run: uv sync --locked
       - run: uv run pytest
+      - run: uv run ruff check
+      - name: app.css is up to date
+        run: |
+          curl -sLo tailwindcss https://github.com/tailwindlabs/tailwindcss/releases/download/v4.3.3/tailwindcss-linux-x64
+          chmod +x tailwindcss
+          ./tailwindcss -i app/tailwind.css -o app/static/app.css --minify
+          git diff --exit-code app/static/app.css
