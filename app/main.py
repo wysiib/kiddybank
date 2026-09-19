@@ -79,8 +79,9 @@ def get_today() -> date:
     return date.today()
 
 
-def render(request: Request, name: str, status_code: int = 200, **ctx):
-    return templates.TemplateResponse(request, name, ctx, status_code=status_code)
+def render(request: Request, name: str, status_code: int | None = None, **ctx):
+    """A page rendered with an `error` key is a 400 unless the caller says otherwise."""
+    return templates.TemplateResponse(request, name, ctx, status_code=status_code or (400 if ctx.get("error") else 200))
 
 
 def redirect(url: str):
@@ -348,7 +349,7 @@ def statement(request: Request, account_id: int, user: User = Depends(kid), s: S
 def _transfer_form(request: Request, s: Session, user: User, error: str | None = None):
     targets = [{"id": ledger.get_account(s, u.id, "giro").id, "avatar": u.avatar, "label": u.name}
                for u in s.exec(select(User).where(User.id != user.id).order_by(User.role.desc(), User.id)).all()]  # type: ignore[attr-defined]
-    return render(request, "transfer.html", 200 if not error else 400, user=user, targets=targets, error=error,
+    return render(request, "transfer.html", user=user, targets=targets, error=error,
                   giro=ledger.get_account(s, user.id, "giro"))
 
 
@@ -389,7 +390,6 @@ def transfer_do(request: Request, to_id: int = Form(...), cents: int = Form(...)
     try:
         ledger.transfer(s, src, dst, cents, today)
     except LedgerError as e:
-        s.rollback()
         return _transfer_form(request, s, user, e.args[0])
     return render(request, "done.html", user=user, emoji="💸", msg=t("xfer.done"), lesson=t("xfer.lesson"))
 
@@ -404,7 +404,7 @@ def _cash_page(request: Request, s: Session, user: User, kind: str, cents: int |
         raise HTTPException(404)
     giro = ledger.get_account(s, user.id, "giro")
     lost = ledger.interest_cents(cents or 0, giro.interest_rate_bp, giro.payout_days) if kind == "abheben" else 0
-    return render(request, "cash.html", 400 if error else 200, user=user, giro=giro, kind=kind, cents=cents,
+    return render(request, "cash.html", user=user, giro=giro, kind=kind, cents=cents,
                   lost=lost, error=error, tok=issue_token(request, "cash") if cents else None)
 
 
@@ -437,14 +437,13 @@ def cash_do(request: Request, kind: str, cents: int = Form(...), pin: str = Form
         if auth.locked(user):
             return _cash_page(request, s, user, kind, cents, "err.locked")
         if not any(verify_pin(pin, p.pin_hash) for p in parents):
-            auth.pin_failed(user)  # returned, not raised: the rollback below would throw the count away
+            auth.pin_failed(user)
             return _cash_page(request, s, user, kind, cents, "cash.pin.wrong")
         auth.pin_ok(user)
         if not use_token(request, "cash", tok):  # a double tap: the first request already did it
             return redirect("/home")
         ledger.manual_booking(s, giro, cents if kind == "einzahlen" else -cents, today)
     except LedgerError as e:
-        s.rollback()
         return _cash_page(request, s, user, kind if kind in CASH else "einzahlen", cents, e.args[0])
     key = "in" if kind == "einzahlen" else "out"
     return render(request, "done.html", user=user, emoji="📥" if key == "in" else "📤", msg=t(f"cash.{key}.done"),
@@ -504,7 +503,6 @@ def festgeld_open(request: Request, cents: int = Form(0), product_id: int = Form
             raise LedgerError("err.term")
         ledger.open_festgeld(s, ledger.get_account(s, user.id, "giro"), cents, product, today)
     except LedgerError as e:
-        s.rollback()
         return redirect(f"/festgeld?error={e.args[0]}")
     return redirect("/festgeld")
 
@@ -519,7 +517,6 @@ def festgeld_collect(request: Request, account_id: int, user: User = Depends(kid
     try:
         total = ledger.collect_festgeld(s, fg, today)
     except LedgerError as e:
-        s.rollback()
         return redirect(f"/festgeld?error={e.args[0]}")
     return render(request, "done.html", user=user, emoji="🧰", msg=t("fg.collected", total=format_money(total)),
                   lesson=t("fg.ready.lesson", interest=format_money(interest)) + " " + t("fg.collected.lesson"))
@@ -536,7 +533,7 @@ def _goals_page(request: Request, s: Session, user: User, error: str | None = No
     cards = _goal_cards(ledger.list_goals(s, user.id), giro)
     active = [c for c in cards if not c["goal"].done_at]
     done = [c for c in reversed(cards) if c["goal"].done_at]
-    return render(request, "goals.html", 200 if not error else 400, user=user, giro=giro, active=active, done=done,
+    return render(request, "goals.html", user=user, giro=giro, active=active, done=done,
                   can_add=len(active) < ledger.MAX_ACTIVE_GOALS, emojis=GOAL_EMOJIS, error=error)
 
 
@@ -560,7 +557,6 @@ def goal_create(request: Request, name: str = Form(""), emoji: str = Form(""), c
     try:
         ledger.create_goal(s, user.id, name, emoji if emoji in GOAL_EMOJIS else GOAL_EMOJIS[0], cents, data or None, today)
     except LedgerError as e:
-        s.rollback()
         return _goals_page(request, s, user, e.args[0])
     return redirect("/ziele")
 
@@ -581,7 +577,6 @@ def goal_finish(request: Request, goal_id: int, user: User = Depends(kid), s: Se
     try:
         ledger.finish_goal(g, ledger.get_account(s, user.id, "giro"), today)
     except LedgerError as e:
-        s.rollback()
         return _goals_page(request, s, user, e.args[0])
     return render(request, "done.html", user=user, emoji="✅", msg=t("goal.done.msg"), lesson=t("goal.done.hint"))
 
@@ -602,7 +597,7 @@ def _parent_page(request: Request, s: Session, user: User, error: str | None = N
     accounts = [(k, ledger.get_account(s, k.id, "giro")) for k in kids]
     rules = [{"rule": r, "kid": s.get(User, s.get(Account, r.to_account_id).user_id)}
              for r in s.exec(select(RecurringRule).order_by(RecurringRule.id)).all()]
-    return render(request, "parent.html", 200 if not error else 400, user=user, kids=kids, accounts=accounts,
+    return render(request, "parent.html", user=user, kids=kids, accounts=accounts,
                   giros={k.id: a for k, a in accounts}, periods=ledger.PAYOUT_PERIODS,
                   products=s.exec(select(FestgeldProduct).order_by(FestgeldProduct.term_days)).all(),
                   default_rate=ledger.DEFAULT_GIRO_BP, default_days=ledger.DEFAULT_PAYOUT_DAYS, rules=rules, avatars=AVATARS, error=error,
@@ -636,7 +631,6 @@ def add_kid(request: Request, name: str = Form(...), pin: str = Form(...), avata
                                giro_rate_bp=parse_rate(rate, period) if rate.strip() else ledger.DEFAULT_GIRO_BP,
                                payout_days=period)
     except LedgerError as e:
-        s.rollback()
         return _parent_page(request, s, user, e.args[0])
     k.festgeld_enabled, k.stocks_enabled = festgeld is not None, stocks is not None
     return redirect("/eltern")
@@ -656,7 +650,6 @@ def set_modules(request: Request, uid: int, rate: str = Form(""), period: int = 
             days = period or giro.payout_days
             ledger.set_giro_rate(s, giro, parse_rate(rate, days), today, days)
         except LedgerError as e:
-            s.rollback()
             return _parent_page(request, s, user, e.args[0])
     k.festgeld_enabled, k.stocks_enabled = festgeld is not None, stocks is not None
     if avatar in AVATARS:
@@ -673,7 +666,6 @@ def book(request: Request, account_id: int = Form(...), amount: str = Form(...),
     try:
         ledger.manual_booking(s, acc, parse_euro(amount), today, note.strip())
     except LedgerError as e:
-        s.rollback()
         return _parent_page(request, s, user, e.args[0])
     return redirect("/eltern")
 
@@ -735,6 +727,5 @@ def add_product(request: Request, name: str = Form(...), days: int = Form(...), 
     try:
         ledger.add_product(s, name, days, parse_rate(rate, period), period)
     except LedgerError as e:
-        s.rollback()
         return _parent_page(request, s, user, e.args[0])
     return redirect("/eltern")

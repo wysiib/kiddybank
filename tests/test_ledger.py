@@ -386,3 +386,19 @@ def test_older_db_gets_added_columns(tmp_path):
     cols = {row[1] for row in sqlite3.connect(path).execute("PRAGMA table_info(account)")}
     assert "payout_days" in cols
     make_engine(f"sqlite:///{path}")  # idempotent
+
+
+def test_failed_operations_change_nothing(s, kids, kurz):
+    """Routes rely on this: after a LedgerError there is nothing to roll back."""
+    mia, tom = kids
+    fund(s, giro(s, mia), 1000)
+    before = lambda: (giro(s, mia).balance_cents, giro(s, tom).balance_cents, len(s.exec(select(Transaction)).all()))  # noqa: E731
+    state = before()
+    for bad in (lambda: ledger.transfer(s, giro(s, mia), giro(s, tom), 5000, D0),
+                lambda: ledger.transfer(s, giro(s, mia), giro(s, tom), -5, D0),
+                lambda: ledger.manual_booking(s, giro(s, mia), -5000, D0),
+                lambda: ledger.open_festgeld(s, giro(s, mia), 5000, kurz, D0)):
+        with pytest.raises(LedgerError):
+            bad()
+        assert before() == state
+    assert s.exec(select(ledger.Account).where(ledger.Account.type == "festgeld")).all() == []
