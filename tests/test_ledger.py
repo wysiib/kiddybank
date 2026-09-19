@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
-from app import ledger, market
+from app import events, festgeld, goals, ledger, market
 from app.ledger import LedgerError
 from app.models import FestgeldProduct, Goal, PriceHistory, RecurringRule, Transaction, make_engine
 
@@ -30,7 +30,7 @@ def kids(s):
 
 @pytest.fixture
 def kurz(s):
-    return ledger.add_product(s, "Kurz", 7, 1200)
+    return festgeld.add_product(s, "Kurz", 7, 1200)
 
 
 def giro(s, user):
@@ -166,43 +166,43 @@ def test_monthly_rule_clamps_to_month_end():
 def test_festgeld_lock_collect_and_payout(s, kids, kurz):
     mia, _ = kids
     fund(s, giro(s, mia), 10_000)
-    fg = ledger.open_festgeld(s, giro(s, mia), 5_000, kurz, D0)
+    fg = festgeld.open_festgeld(s, giro(s, mia), 5_000, kurz, D0)
     assert giro(s, mia).balance_cents == 5_000 and fg.balance_cents == 5_000
-    assert ledger.festgeld_status(fg, D0) == "locked"
+    assert festgeld.festgeld_status(fg, D0) == "locked"
 
     with pytest.raises(LedgerError, match="err.festgeld_locked"):
-        ledger.collect_festgeld(s, fg, D0 + timedelta(days=6))
+        festgeld.collect_festgeld(s, fg, D0 + timedelta(days=6))
     with pytest.raises(LedgerError, match="err.festgeld_locked"):  # no other way out either
         ledger.transfer(s, fg, giro(s, mia), 100, D0 + timedelta(days=8))
 
     maturity = D0 + timedelta(days=7)
-    assert ledger.festgeld_status(fg, maturity) == "ready"
-    total, interest = ledger.festgeld_payout(fg)
+    assert festgeld.festgeld_status(fg, maturity) == "ready"
+    total, interest = festgeld.festgeld_payout(fg)
     assert interest == 12  # 5000 * 12% * 7/365 = 11.51 cents, rounded to the nearest cent
-    assert ledger.collect_festgeld(s, fg, maturity) == (total, interest) == (5_012, 12)
+    assert festgeld.collect_festgeld(s, fg, maturity) == (total, interest) == (5_012, 12)
     # the Giro is settled before the payout lands: its 50 EUR earned 9.59 -> 10 cents of its own over the week
     assert giro(s, mia).balance_cents == 5_000 + 10 + 5_012 and fg.balance_cents == 0
-    assert ledger.festgeld_status(fg, maturity) == "collected"
+    assert festgeld.festgeld_status(fg, maturity) == "collected"
 
     with pytest.raises(LedgerError, match="err.already_collected"):
-        ledger.collect_festgeld(s, fg, maturity)
+        festgeld.collect_festgeld(s, fg, maturity)
 
 
 def test_several_deposits_at_once_keep_their_own_rate(s, kids, kurz):
     mia, _ = kids
-    lang = ledger.add_product(s, "Lang", 30, 2000)
+    lang = festgeld.add_product(s, "Lang", 30, 2000)
     fund(s, giro(s, mia), 10_000)
-    a = ledger.open_festgeld(s, giro(s, mia), 3_000, kurz, D0)
-    b = ledger.open_festgeld(s, giro(s, mia), 4_000, lang, D0)
+    a = festgeld.open_festgeld(s, giro(s, mia), 3_000, kurz, D0)
+    b = festgeld.open_festgeld(s, giro(s, mia), 4_000, lang, D0)
     assert giro(s, mia).balance_cents == 3_000
     assert (a.name, a.interest_rate_bp, b.name, b.interest_rate_bp) == ("Kurz", 1200, "Lang", 2000)
 
     lang.rate_bp = 500  # a later rate change must not touch open deposits
     assert b.interest_rate_bp == 2000
-    assert ledger.festgeld_payout(b)[1] == 66  # 4000 * 20% * 30/365 = 65.75 cents, the old rate
+    assert festgeld.festgeld_payout(b)[1] == 66  # 4000 * 20% * 30/365 = 65.75 cents, the old rate
 
-    ledger.collect_festgeld(s, a, D0 + timedelta(days=7))  # collecting one leaves the other locked
-    assert ledger.festgeld_status(b, D0 + timedelta(days=7)) == "locked"
+    festgeld.collect_festgeld(s, a, D0 + timedelta(days=7))  # collecting one leaves the other locked
+    assert festgeld.festgeld_status(b, D0 + timedelta(days=7)) == "locked"
 
 
 def test_rate_change_settles_interest_at_the_old_rate_first(s, kids):
@@ -219,21 +219,21 @@ def test_rates_and_products_are_validated(s, kids):
         with pytest.raises(LedgerError, match="err.rate"):
             ledger.set_giro_rate(s, giro(s, kids[0]), bad, D0)
         with pytest.raises(LedgerError, match="err.rate"):
-            ledger.add_product(s, "X", 7, bad)
+            festgeld.add_product(s, "X", 7, bad)
     with pytest.raises(LedgerError, match="err.rate"):
-        ledger.add_product(s, "X", 7, 100, rate_days=14)
-    assert ledger.add_product(s, "X", 7, 100, rate_days=7).rate_days == 7
+        festgeld.add_product(s, "X", 7, 100, rate_days=14)
+    assert festgeld.add_product(s, "X", 7, 100, rate_days=7).rate_days == 7
     with pytest.raises(LedgerError, match="err.term"):
-        ledger.add_product(s, "X", 0, 100)
+        festgeld.add_product(s, "X", 0, 100)
     with pytest.raises(LedgerError, match="err.name"):
-        ledger.add_product(s, "  ", 7, 100)
+        festgeld.add_product(s, "  ", 7, 100)
 
 
 def test_default_products_are_seeded_once(s):
-    ledger.seed_default_products(s)
-    ledger.seed_default_products(s)
+    festgeld.seed_default_products(s)
+    festgeld.seed_default_products(s)
     assert [(p.name, p.term_days, p.rate_bp) for p in s.exec(select(FestgeldProduct).order_by(FestgeldProduct.id))] == \
-        list(ledger.DEFAULT_PRODUCTS)
+        list(festgeld.DEFAULT_PRODUCTS)
 
 
 def test_celebrations_show_once(s, kids):
@@ -241,9 +241,9 @@ def test_celebrations_show_once(s, kids):
     sp = giro(s, mia)
     sp.balance_cents = 10_000
     ledger.ensure_up_to_date(s, sp, D0 + timedelta(days=30))
-    assert [t.type for t in ledger.unseen_events(s, mia.id)] == ["zins"] * 4  # the app shows them as one celebration
-    ledger.mark_seen(s, mia.id, D0)
-    assert ledger.unseen_events(s, mia.id) == []
+    assert [t.type for t in events.unseen_events(s, mia.id)] == ["zins"] * 4  # the app shows them as one celebration
+    events.mark_seen(s, mia.id, D0)
+    assert events.unseen_events(s, mia.id) == []
 
 
 def test_statement_running_balance(s, kids):
@@ -295,7 +295,7 @@ JPEG = b"\xff\xd8\xff\xe0" + b"x" * 100
 
 def make_goal(s, user, **kw):
     args = {"name": "Lego", "emoji": "🧸", "target_cents": 500, "photo": None, **kw}
-    return ledger.create_goal(s, user.id, today=D0, **args)
+    return goals.create_goal(s, user.id, today=D0, **args)
 
 
 def test_goal_validation_and_photo_roundtrip(s, kids):
@@ -307,7 +307,7 @@ def test_goal_validation_and_photo_roundtrip(s, kids):
     with pytest.raises(LedgerError, match="err.photo_type"):
         make_goal(s, mia, photo=b"GIF89a")
     with pytest.raises(LedgerError, match="err.photo_size"):
-        make_goal(s, mia, photo=JPEG + b"x" * ledger.MAX_PHOTO_BYTES)
+        make_goal(s, mia, photo=JPEG + b"x" * goals.MAX_PHOTO_BYTES)
 
     g = make_goal(s, mia, name="", photo=JPEG)  # a photo alone is enough
     s.expire_all()  # force a real read back from SQLite
@@ -316,46 +316,46 @@ def test_goal_validation_and_photo_roundtrip(s, kids):
 
 def test_goal_limit_counts_only_active_goals(s, kids):
     mia, tom = kids
-    goals = [make_goal(s, mia) for _ in range(ledger.MAX_ACTIVE_GOALS)]
+    made = [make_goal(s, mia) for _ in range(goals.MAX_ACTIVE_GOALS)]
     with pytest.raises(LedgerError, match="err.goal_limit"):
         make_goal(s, mia)
     make_goal(s, tom)  # limit is per kid
 
     fund(s, giro(s, mia), 500)
-    ledger.finish_goal(goals[0], giro(s, mia), D0)
+    goals.finish_goal(made[0], giro(s, mia), D0)
     make_goal(s, mia)  # a finished goal frees a slot
 
 
 def test_goal_progress_reached_and_finish(s, kids):
     mia, _ = kids
     g = make_goal(s, mia)
-    assert ledger.goal_progress(g, giro(s, mia)) == 0
+    assert goals.goal_progress(g, giro(s, mia)) == 0
 
     fund(s, giro(s, mia), 250)
-    assert ledger.goal_progress(g, giro(s, mia)) == 50
-    assert not ledger.goal_reached(g, giro(s, mia))
+    assert goals.goal_progress(g, giro(s, mia)) == 50
+    assert not goals.goal_reached(g, giro(s, mia))
     with pytest.raises(LedgerError, match="err.goal_not_reached"):
-        ledger.finish_goal(g, giro(s, mia), D0)
+        goals.finish_goal(g, giro(s, mia), D0)
 
     fund(s, giro(s, mia), 300)  # 550 of 500
-    assert ledger.goal_progress(g, giro(s, mia)) == 100  # capped
-    assert ledger.goal_reached(g, giro(s, mia))
-    assert ledger.unseen_reached_goals(s, mia.id) == [g]
+    assert goals.goal_progress(g, giro(s, mia)) == 100  # capped
+    assert goals.goal_reached(g, giro(s, mia))
+    assert goals.unseen_reached_goals(s, mia.id) == [g]
 
-    ledger.mark_seen(s, mia.id, D0)
-    assert ledger.unseen_reached_goals(s, mia.id) == []  # celebrated once
+    events.mark_seen(s, mia.id, D0)
+    assert goals.unseen_reached_goals(s, mia.id) == []  # celebrated once
 
-    ledger.finish_goal(g, giro(s, mia), D0)
-    assert g.done_at and not ledger.goal_reached(g, giro(s, mia))
-    assert ledger.goal_progress(g, giro(s, mia)) == 100
+    goals.finish_goal(g, giro(s, mia), D0)
+    assert g.done_at and not goals.goal_reached(g, giro(s, mia))
+    assert goals.goal_progress(g, giro(s, mia)) == 100
 
 
 def test_goal_already_affordable_has_no_celebration(s, kids):
     mia, _ = kids
     fund(s, giro(s, mia), 1000)
     g = make_goal(s, mia)
-    assert ledger.goal_reached(g, giro(s, mia))
-    assert ledger.unseen_reached_goals(s, mia.id) == []
+    assert goals.goal_reached(g, giro(s, mia))
+    assert goals.unseen_reached_goals(s, mia.id) == []
 
 
 def test_week_summary_buckets_and_window(s, kids, kurz):
@@ -370,7 +370,7 @@ def test_week_summary_buckets_and_window(s, kids, kurz):
     ledger.post(s, None, sp, 700, "manual", D0, now=at(2))  # parent deposit
     ledger.post(s, sp, None, 250, "manual", D0, now=at(3))  # parent withdrawal
     ledger.post(s, sp, giro(s, tom), 150, "manual", D0, now=at(3))  # gift to Tom
-    fg = ledger.open_festgeld(s, sp, 200, kurz, D0)  # saving is neither income nor spending
+    fg = festgeld.open_festgeld(s, sp, 200, kurz, D0)  # saving is neither income nor spending
     assert ledger.week_summary(s, sp, D0) == {"dauerauftrag": 800, "zins": 40, "other": 700, "spent": 400}
     assert ledger.week_summary(s, giro(s, tom), D0) == {"dauerauftrag": 0, "zins": 0, "other": 150, "spent": 0}
     assert fg.balance_cents == 200
@@ -397,7 +397,7 @@ def test_failed_operations_change_nothing(s, kids, kurz):
     for bad in (lambda: ledger.transfer(s, giro(s, mia), giro(s, tom), 5000, D0),
                 lambda: ledger.transfer(s, giro(s, mia), giro(s, tom), -5, D0),
                 lambda: ledger.manual_booking(s, giro(s, mia), -5000, D0),
-                lambda: ledger.open_festgeld(s, giro(s, mia), 5000, kurz, D0)):
+                lambda: festgeld.open_festgeld(s, giro(s, mia), 5000, kurz, D0)):
         with pytest.raises(LedgerError):
             bad()
         assert before() == state
@@ -407,10 +407,10 @@ def test_failed_operations_change_nothing(s, kids, kurz):
 def test_goal_lists_do_not_load_photos(s, kids):
     from sqlalchemy import inspect
     uid = kids[0].id
-    ledger.create_goal(s, uid, "Lego", "🧸", 2000, b"\xff\xd8\xff" + b"x" * 1000, D0)
+    goals.create_goal(s, uid, "Lego", "🧸", 2000, b"\xff\xd8\xff" + b"x" * 1000, D0)
     s.commit()
     s.expunge_all()
-    goal = ledger.list_goals(s, uid)[0]
+    goal = goals.list_goals(s, uid)[0]
     assert goal.has_photo and "photo" in inspect(goal).unloaded  # the BLOB stays in the DB until asked for
     assert s.get(Goal, goal.id).photo.startswith(b"\xff\xd8\xff")
 

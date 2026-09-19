@@ -15,8 +15,7 @@ from sqlmodel import Session, select
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
-from . import ledger
-from . import auth
+from . import auth, events, festgeld, goals, ledger
 from .auth import verify_pin
 from .i18n import LOCALE, STRINGS, format_date, format_money, format_percent, t
 from .ledger import LedgerError
@@ -242,7 +241,7 @@ def setup(request: Request, name: str = Form(...), pin: str = Form(...), s: Sess
     except LedgerError as e:
         return render(request, "setup.html", 400, error=e.args[0])
     u = ledger.create_user(s, name.strip(), "parent", pin, "👪", today)
-    ledger.seed_default_products(s)
+    festgeld.seed_default_products(s)
     sign_in(request, u)
     return redirect("/eltern")
 
@@ -297,10 +296,10 @@ def service_worker():
 def _events(s: Session, user: User) -> list[dict]:
     """Unseen interest / allowance (summed per kind) and reached goals, for the celebration screen."""
     totals: dict[str, int] = {}
-    for tx in ledger.unseen_events(s, user.id):
+    for tx in events.unseen_events(s, user.id):
         totals[tx.type] = totals.get(tx.type, 0) + tx.amount_cents
     return [{"type": k, "cents": v} for k, v in totals.items()] + [
-        {"type": "goal", "goal": g} for g in ledger.unseen_reached_goals(s, user.id)]
+        {"type": "goal", "goal": g} for g in goals.unseen_reached_goals(s, user.id)]
 
 
 def _interest_hint(acc: Account, today: date) -> str:
@@ -317,14 +316,14 @@ def home(request: Request, user: User = Depends(kid), s: Session = db, today: da
     giro = ledger.get_account(s, user.id, "giro")
     week = {k: v for k, v in ledger.week_summary(s, giro, today).items() if v}
     deposits = active_deposits(s, user)
-    cards = _goal_cards([g for g in ledger.list_goals(s, user.id) if not g.done_at], giro)
+    cards = _goal_cards([g for g in goals.list_goals(s, user.id) if not g.done_at], giro)
     return render(request, "home.html", user=user, giro=giro, deposits=deposits, top=max(cards, key=lambda c: c["pct"], default=None), week=week,
                   events=_events(s, user), interest_hint=_interest_hint(giro, today), festgeld_visible=user.festgeld_enabled or bool(deposits))
 
 
 @app.post("/gesehen")
 def seen(user: User = Depends(kid), s: Session = db, today: date = Depends(get_today)):
-    ledger.mark_seen(s, user.id, today)
+    events.mark_seen(s, user.id, today)
     return redirect("/home")
 
 
@@ -470,9 +469,9 @@ def _festgeld_page(request: Request, s: Session, user: User, today: date, error:
     deposits = active_deposits(s, user)
     if not user.festgeld_enabled and not deposits:
         raise HTTPException(403, "err.module_off")
-    rows = [{"acc": a, "status": ledger.festgeld_status(a, today), "days": (a.maturity_date - today).days,
-             "payout": ledger.festgeld_payout(a)} for a in deposits]
-    products, towers = ledger.offer_towers(s, ledger.get_account(s, user.id, "giro"), 0)
+    rows = [{"acc": a, "status": festgeld.festgeld_status(a, today), "days": (a.maturity_date - today).days,
+             "payout": festgeld.festgeld_payout(a)} for a in deposits]
+    products, towers = festgeld.offer_towers(s, ledger.get_account(s, user.id, "giro"), 0)
     return render(request, "festgeld.html", user=user, rows=rows, products=products, towers=towers, error=error,
                   tok=issue_token(request, "festgeld"), days=ledger.get_account(s, user.id, "giro").payout_days)
 
@@ -487,11 +486,11 @@ def festgeld_page(request: Request, user: User = Depends(kid), s: Session = db,
 def festgeld_preview(request: Request, cents: int = 0, product_id: int = 0, user: User = Depends(kid),
                      s: Session = db):
     product = s.get(FestgeldProduct, product_id)
-    products, towers = ledger.offer_towers(s, ledger.get_account(s, user.id, "giro"), cents)
+    products, towers = festgeld.offer_towers(s, ledger.get_account(s, user.id, "giro"), cents)
     ctx = dict(oob=True, products=products, towers=towers)  # also refreshes the bars in every offer tile
     if cents <= 0 or not product:
         return render(request, "_preview.html", total=None, **ctx)
-    return render(request, "_preview.html", total=ledger.payout(cents, product.rate_bp, product.term_days)[0], **ctx)
+    return render(request, "_preview.html", total=festgeld.payout(cents, product.rate_bp, product.term_days)[0], **ctx)
 
 
 @app.post("/festgeld/oeffnen")
@@ -504,7 +503,7 @@ def festgeld_open(request: Request, cents: int = Form(0), product_id: int = Form
         product = s.get(FestgeldProduct, product_id)
         if not product:
             raise LedgerError("err.term")
-        ledger.open_festgeld(s, ledger.get_account(s, user.id, "giro"), cents, product, today)
+        festgeld.open_festgeld(s, ledger.get_account(s, user.id, "giro"), cents, product, today)
     except LedgerError as e:
         return _festgeld_page(request, s, user, today, e.args[0])
     return redirect("/festgeld")
@@ -517,7 +516,7 @@ def festgeld_collect(request: Request, account_id: int, user: User = Depends(kid
     if not fg or fg.user_id != user.id or fg.type != "festgeld":
         raise HTTPException(404)
     try:
-        total, interest = ledger.collect_festgeld(s, fg, today)
+        total, interest = festgeld.collect_festgeld(s, fg, today)
     except LedgerError as e:
         return _festgeld_page(request, s, user, today, e.args[0])
     return render(request, "done.html", user=user, emoji="🧰", msg=t("fg.collected", total=format_money(total)),
@@ -526,17 +525,17 @@ def festgeld_collect(request: Request, account_id: int, user: User = Depends(kid
 
 # --- kid: goals --------------------------------------------------------------------------------
 
-def _goal_cards(goals: list[Goal], giro: Account) -> list[dict]:
-    return [{"goal": g, "pct": ledger.goal_progress(g, giro), "reached": ledger.goal_reached(g, giro)} for g in goals]
+def _goal_cards(items: list[Goal], giro: Account) -> list[dict]:
+    return [{"goal": g, "pct": goals.goal_progress(g, giro), "reached": goals.goal_reached(g, giro)} for g in items]
 
 
 def _goals_page(request: Request, s: Session, user: User, error: str | None = None):
     giro = ledger.get_account(s, user.id, "giro")
-    cards = _goal_cards(ledger.list_goals(s, user.id), giro)
+    cards = _goal_cards(goals.list_goals(s, user.id), giro)
     active = [c for c in cards if not c["goal"].done_at]
     done = [c for c in reversed(cards) if c["goal"].done_at]
     return render(request, "goals.html", user=user, giro=giro, active=active, done=done,
-                  can_add=len(active) < ledger.MAX_ACTIVE_GOALS, emojis=GOAL_EMOJIS, error=error)
+                  can_add=len(active) < goals.MAX_ACTIVE_GOALS, emojis=GOAL_EMOJIS, error=error)
 
 
 def _own_goal(s: Session, user: User, goal_id: int) -> Goal:
@@ -555,9 +554,9 @@ def goals_page(request: Request, user: User = Depends(kid), s: Session = db):
 def goal_create(request: Request, name: str = Form(""), emoji: str = Form(""), cents: int = Form(0),
                 photo: UploadFile | None = File(None), user: User = Depends(kid), s: Session = db,
                 today: date = Depends(get_today)):
-    data = photo.file.read(ledger.MAX_PHOTO_BYTES + 1) if photo else b""  # bounded read, size is checked in the ledger
+    data = photo.file.read(goals.MAX_PHOTO_BYTES + 1) if photo else b""  # bounded read, size is checked in the ledger
     try:
-        ledger.create_goal(s, user.id, name, emoji if emoji in GOAL_EMOJIS else GOAL_EMOJIS[0], cents, data or None, today)
+        goals.create_goal(s, user.id, name, emoji if emoji in GOAL_EMOJIS else GOAL_EMOJIS[0], cents, data or None, today)
     except LedgerError as e:
         return _goals_page(request, s, user, e.args[0])
     return redirect("/ziele")
@@ -577,7 +576,7 @@ def goal_finish(request: Request, goal_id: int, user: User = Depends(kid), s: Se
                 today: date = Depends(get_today)):
     g = _own_goal(s, user, goal_id)
     try:
-        ledger.finish_goal(g, ledger.get_account(s, user.id, "giro"), today)
+        goals.finish_goal(g, ledger.get_account(s, user.id, "giro"), today)
     except LedgerError as e:
         return _goals_page(request, s, user, e.args[0])
     return render(request, "done.html", user=user, emoji="✅", msg=t("goal.done.msg"), lesson=t("goal.done.hint"))
@@ -603,7 +602,7 @@ def _parent_page(request: Request, s: Session, user: User, error: str | None = N
                   giros={k.id: a for k, a in accounts}, periods=ledger.PAYOUT_PERIODS,
                   products=s.exec(select(FestgeldProduct).order_by(FestgeldProduct.term_days)).all(),
                   default_rate=ledger.DEFAULT_GIRO_BP, default_days=ledger.DEFAULT_PAYOUT_DAYS, rules=rules, avatars=AVATARS, error=error,
-                  goals={k.id: _goal_cards(ledger.list_goals(s, k.id), acc) for k, acc in accounts})
+                  goals={k.id: _goal_cards(goals.list_goals(s, k.id), acc) for k, acc in accounts})
 
 
 @app.get("/eltern")
@@ -712,7 +711,7 @@ def delete_product(product_id: int, user: User = Depends(parent), s: Session = d
 def add_product(request: Request, name: str = Form(...), days: int = Form(...), rate: str = Form(...),
                 period: int = Form(ledger.DEFAULT_PAYOUT_DAYS), user: User = Depends(parent), s: Session = db):
     try:
-        ledger.add_product(s, name, days, parse_rate(rate, period), period)
+        festgeld.add_product(s, name, days, parse_rate(rate, period), period)
     except LedgerError as e:
         return _parent_page(request, s, user, e.args[0])
     return redirect("/eltern")

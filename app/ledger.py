@@ -6,11 +6,10 @@ Errors are LedgerError(i18n_key), never sentences.
 import calendar
 from datetime import date, datetime, time, timedelta
 
-from sqlalchemy.orm import defer
 from sqlmodel import Session, select
 
 from .auth import hash_pin
-from .models import Account, FestgeldProduct, Goal, RecurringRule, Transaction, User
+from .models import Account, RecurringRule, Transaction, User
 
 MAX_CENTS = 100_000_000  # 1 million EUR: far above any pocket money, far below SQLite's 64-bit integers
 INTEREST_DENOM = 10_000 * 365  # interest_accrued unit: 1 cent
@@ -30,8 +29,6 @@ def period_bp(annual: int, days: int) -> int:
 # Defaults only, everything below is editable by a parent. Deliberately high for kids: 10 EUR must
 # visibly earn something within a week.
 DEFAULT_GIRO_BP = annual_bp(100, 7)  # 1 % per week
-DEFAULT_PRODUCTS = (("Kurz", 7, annual_bp(150, 7)), ("Mittel", 14, annual_bp(200, 7)),
-                    ("Lang", 30, annual_bp(300, 7)))  # name, term days, rate bp; entered per week
 MAX_RATE_BP = annual_bp(10_000, 7)  # 100 % per week
 
 
@@ -39,7 +36,7 @@ class LedgerError(Exception):
     """args[0] is an i18n key."""
 
 
-def _check_rate(rate_bp: int, days: int = DEFAULT_PAYOUT_DAYS) -> None:
+def check_rate(rate_bp: int, days: int = DEFAULT_PAYOUT_DAYS) -> None:
     if not 0 <= rate_bp <= MAX_RATE_BP or days not in PAYOUT_PERIODS:
         raise LedgerError("err.rate")
 
@@ -48,7 +45,7 @@ def create_user(s: Session, name: str, role: str, pin: str, avatar: str = "🐷"
                 giro_rate_bp: int = DEFAULT_GIRO_BP, payout_days: int = DEFAULT_PAYOUT_DAYS) -> User:
     today = today or date.today()
     rate = giro_rate_bp if role == "child" else 0  # a parent's account is not part of the interest lesson
-    _check_rate(rate, payout_days)
+    check_rate(rate, payout_days)
     u = User(name=name, role=role, pin_hash=hash_pin(pin), avatar=avatar)
     s.add(u)
     s.flush()
@@ -60,7 +57,7 @@ def create_user(s: Session, name: str, role: str, pin: str, avatar: str = "🐷"
 
 def set_giro_rate(s: Session, giro: Account, rate_bp: int, today: date, payout_days: int | None = None) -> None:
     payout_days = payout_days or giro.payout_days
-    _check_rate(rate_bp, payout_days)
+    check_rate(rate_bp, payout_days)
     ensure_up_to_date(s, giro, today)  # settle interest at the old rate first
     giro.interest_rate_bp, giro.payout_days = rate_bp, payout_days
 
@@ -78,7 +75,7 @@ def check_amount(cents: int) -> None:
         raise LedgerError("err.amount")
 
 
-def _check_debit(acc: Account, cents: int) -> None:
+def check_debit(acc: Account, cents: int) -> None:
     check_amount(cents)
     if acc.balance_cents < cents and not acc.allow_overdraft:
         raise LedgerError("err.insufficient")
@@ -104,7 +101,7 @@ def _post(s: Session, from_acc: Account | None, to_acc: Account | None, cents: i
     """The booking itself, without settling. Used by the settling code (interest, allowance) so it cannot recurse."""
     check_amount(cents)
     if from_acc is not None:
-        _check_debit(from_acc, cents)
+        check_debit(from_acc, cents)
         from_acc.balance_cents -= cents
     if to_acc is not None:
         to_acc.balance_cents += cents
@@ -169,6 +166,10 @@ def catch_up_user(s: Session, user_id: int, today: date) -> None:
 def _round_cents(units: int) -> int:
     """Nearest cent, not floor: '1 % per week' is stored as 5214 bp/year (5214.29 exactly) and must still pay 1,00 on 100."""
     return (units + INTEREST_DENOM // 2) // INTEREST_DENOM
+
+
+def interest_cents(cents: int, rate_bp: int, days: int) -> int:
+    return _round_cents(cents * rate_bp * days)
 
 
 def _accrue(acc: Account, day: date) -> None:
@@ -236,106 +237,7 @@ def first_run(interval: str, anchor: int, today: date) -> date:
     return d if d > today else _next_run(d, "monthly")
 
 
-# --- festgeld ----------------------------------------------------------------------------------
-
-def _check_product(name: str, term_days: int, rate_bp: int, rate_days: int) -> None:
-    if not name.strip():
-        raise LedgerError("err.name")
-    if not 1 <= term_days <= 3650:
-        raise LedgerError("err.term")
-    _check_rate(rate_bp, rate_days)
-
-
-def add_product(s: Session, name: str, term_days: int, rate_bp: int, rate_days: int = 365) -> FestgeldProduct:
-    _check_product(name, term_days, rate_bp, rate_days)
-    p = FestgeldProduct(name=name.strip(), term_days=term_days, rate_bp=rate_bp, rate_days=rate_days)
-    s.add(p)
-    s.flush()
-    return p
-
-
-def seed_default_products(s: Session) -> None:
-    if not s.exec(select(FestgeldProduct)).first():
-        for name, days, bp in DEFAULT_PRODUCTS:
-            add_product(s, name, days, bp, rate_days=DEFAULT_PAYOUT_DAYS)
-
-
-def open_festgeld(s: Session, giro: Account, cents: int, product: FestgeldProduct, today: date) -> Account:
-    ensure_up_to_date(s, giro, today)
-    _check_debit(giro, cents)
-    fg = Account(user_id=giro.user_id, type="festgeld", name=product.name, interest_rate_bp=product.rate_bp,
-                 last_updated=today, interest_paid_on=today, opened_at=today,
-                 maturity_date=today + timedelta(days=product.term_days))
-    s.add(fg)
-    s.flush()
-    post(s, giro, fg, cents, "festgeld", today)
-    return fg
-
-
-def festgeld_status(fg: Account, today: date) -> str:
-    if fg.collected_at:
-        return "collected"
-    return "ready" if today >= fg.maturity_date else "locked"
-
-
-def interest_cents(cents: int, rate_bp: int, days: int) -> int:
-    return _round_cents(cents * rate_bp * days)
-
-
-def payout(cents: int, rate_bp: int, term_days: int) -> tuple[int, int]:
-    """(total, interest) of a Festgeld held to maturity. Feeds the preview, the deposit card and the booking."""
-    interest = interest_cents(cents, rate_bp, term_days)
-    return cents + interest, interest
-
-
-def festgeld_payout(fg: Account) -> tuple[int, int]:
-    return payout(fg.balance_cents, fg.interest_rate_bp, (fg.maturity_date - fg.opened_at).days)
-
-
-TOWER_DEMO_CENTS = 1000  # amount the offer bars show until the kid has dialled one in
-
-
-def offer_towers(s: Session, giro: Account, cents: int):
-    """The offers plus, per offer, the bonus this Giro vs. that offer would pay on `cents` and the bar heights (0-100, one shared scale)."""
-    products = s.exec(select(FestgeldProduct).order_by(FestgeldProduct.term_days)).all()
-    cents = cents if cents > 0 else TOWER_DEMO_CENTS
-    bonus = {p.id: (interest_cents(cents, giro.interest_rate_bp, p.term_days), interest_cents(cents, p.rate_bp, p.term_days))
-             for p in products}
-    top = max((b for pair in bonus.values() for b in pair), default=0)
-    height = lambda b: max(8, b * 100 // top) if b else 0  # noqa: E731  a tiny bonus still gets a visible stub
-    return products, {pid: {"giro": g, "fg": f, "giro_h": height(g), "fg_h": height(f)} for pid, (g, f) in bonus.items()}
-
-
-def collect_festgeld(s: Session, fg: Account, today: date) -> tuple[int, int]:
-    """Pays the deposit plus interest into the Giro. Returns (total, interest)."""
-    status = festgeld_status(fg, today)
-    if status != "ready":
-        raise LedgerError("err.festgeld_locked" if status == "locked" else "err.already_collected")
-    total, interest = festgeld_payout(fg)
-    giro = get_account(s, fg.user_id, "giro")
-    if interest:
-        post(s, None, fg, interest, "zins", today, seen=True)  # the kid is looking at it right now
-    post(s, fg, giro, total, "festgeld", today, seen=True)
-    fg.collected_at = stamp(today)
-    return total, interest
-
-
 # --- reading -----------------------------------------------------------------------------------
-
-def unseen_events(s: Session, user_id: int) -> list[Transaction]:
-    ids = [a.id for a in s.exec(select(Account).where(Account.user_id == user_id)).all()]
-    return list(s.exec(select(Transaction).where(
-        Transaction.to_account_id.in_(ids), Transaction.type.in_(("zins", "dauerauftrag")),
-        Transaction.seen_at.is_(None)).order_by(Transaction.timestamp)).all())
-
-
-def mark_seen(s: Session, user_id: int, today: date) -> None:
-    now = stamp(today)
-    for t in unseen_events(s, user_id):
-        t.seen_at = now
-    for g in unseen_reached_goals(s, user_id):
-        g.reached_seen_at = now
-
 
 def statement(s: Session, acc: Account, limit: int = 50) -> list[tuple[Transaction, int, int]]:
     """Newest first: (transaction, signed amount for this account, balance afterwards). Balance is derived."""
@@ -365,58 +267,3 @@ def week_summary(s: Session, giro: Account, today: date) -> dict[str, int]:
     return out
 
 
-# --- goals -------------------------------------------------------------------------------------
-
-MAX_ACTIVE_GOALS = 3
-MAX_PHOTO_BYTES = 300_000  # the browser shrinks photos to ~50 KB, this only stops abuse
-
-
-def list_goals(s: Session, user_id: int) -> list[Goal]:
-    # finished goals are kept forever, so their photos stay out of every page load; only /ziele/{id}/bild reads one
-    return list(s.exec(select(Goal).where(Goal.user_id == user_id).options(defer(Goal.photo)).order_by(Goal.id)).all())
-
-
-def goal_progress(goal: Goal, giro: Account) -> int:
-    """Whole percent (0-100) of the target the Giro balance covers."""
-    if goal.done_at:
-        return 100
-    return max(0, min(100, giro.balance_cents * 100 // goal.target_cents))
-
-
-def goal_reached(goal: Goal, giro: Account) -> bool:
-    return goal.done_at is None and giro.balance_cents >= goal.target_cents
-
-
-def create_goal(s: Session, user_id: int, name: str, emoji: str, target_cents: int, photo: bytes | None,
-                today: date) -> Goal:
-    name = name.strip()[:40]
-    check_amount(target_cents)
-    if photo is not None:
-        if len(photo) > MAX_PHOTO_BYTES:
-            raise LedgerError("err.photo_size")
-        # ponytail: JPEG only (the browser re-encodes everything to JPEG); add Pillow if other formats are ever needed
-        if not photo.startswith(b"\xff\xd8\xff"):
-            raise LedgerError("err.photo_type")
-    if not name and photo is None:
-        raise LedgerError("err.goal_empty")
-    if sum(1 for g in list_goals(s, user_id) if g.done_at is None) >= MAX_ACTIVE_GOALS:
-        raise LedgerError("err.goal_limit")
-    now = stamp(today)
-    goal = Goal(user_id=user_id, name=name, emoji=emoji, target_cents=target_cents, photo=photo,
-                has_photo=photo is not None, created_at=now)
-    if goal_reached(goal, get_account(s, user_id, "giro")):
-        goal.reached_seen_at = now  # already affordable at creation: no fake celebration
-    s.add(goal)
-    s.flush()
-    return goal
-
-
-def finish_goal(goal: Goal, giro: Account, today: date) -> None:
-    if not goal_reached(goal, giro):
-        raise LedgerError("err.goal_not_reached")
-    goal.done_at = stamp(today)
-
-
-def unseen_reached_goals(s: Session, user_id: int) -> list[Goal]:
-    giro = get_account(s, user_id, "giro")
-    return [g for g in list_goals(s, user_id) if g.reached_seen_at is None and goal_reached(g, giro)]

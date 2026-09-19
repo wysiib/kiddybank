@@ -20,9 +20,9 @@ bin/tailwindcss -i app/tailwind.css -o app/static/app.css --minify   # rebuild C
 
 ## Architecture
 
-Layering: `main.py` (routes, form parsing, view models) → `ledger.py` / `market.py` (all money logic) → `models.py` (SQLModel tables + engine). `i18n.py` and `auth.py` are leaf helpers.
+Layering: `main.py` (routes, form parsing, view models) → `ledger.py` (accounts, `post`, interest, allowance) with `festgeld.py`, `goals.py`, `events.py` and `market.py` on top of it (`festgeld`/`goals` import `ledger`, never the reverse) → `models.py` (SQLModel tables + engine). `i18n.py` and `auth.py` are leaf helpers.
 
-**Ledger rules (`ledger.py`)** — these span several files, so read them before touching money code:
+**Ledger rules (`ledger.py`, `festgeld.py`, `goals.py`)** — these span several files, so read them before touching money code:
 - Money is integer cents; rates are integer basis points (`parse_euro` / `parse_percent` in `main.py` convert user text).
 - Ledger functions `flush` but never `commit`. The transaction belongs to the request: `get_session` commits on success and rolls back on exception. Ledger functions validate before they mutate, so a `LedgerError` leaves nothing half-done and routes just re-render with the key; do not `rollback()` (it would also throw away the lazy catch-up that just ran). Keep it that way: check first, then change.
 - Errors are `LedgerError("i18n.key")`, never sentences; routes pass the key to the template.

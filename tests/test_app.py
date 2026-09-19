@@ -5,7 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
 
-from app import auth, ledger, main
+from app import auth, goals, ledger, main
 from app.models import Transaction
 
 D0 = date(2026, 1, 1)
@@ -206,7 +206,7 @@ def test_goal_rejects_bad_input(family):
     login(family, 2, "1111")
     r = family.post("/ziele", data={"name": "x", "cents": 500}, files={"photo": ("g.gif", b"GIF89a", "image/gif")})
     assert r.status_code == 400 and "geht es leider nicht" in r.text
-    big = JPEG + b"x" * ledger.MAX_PHOTO_BYTES
+    big = JPEG + b"x" * goals.MAX_PHOTO_BYTES
     r = family.post("/ziele", data={"name": "x", "cents": 500}, files={"photo": ("g.jpg", big, "image/jpeg")})
     assert r.status_code == 400 and "zu groß" in r.text
     assert add_goal(family, cents=0).status_code == 400
@@ -332,7 +332,6 @@ def giro_cents(uid):
 
 def test_cash_in_and_out_need_parent_pin(family):
     login(family, 2, "1111")
-    mia = account_id(2, "giro")
 
     r = family.post("/bar/abheben/pruefen", data={"cents": 300})
     assert "Vorher 10,00 €" in r.text and "Nachher 7,00 €" in r.text
