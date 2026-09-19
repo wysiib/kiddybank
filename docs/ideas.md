@@ -4,15 +4,15 @@ Ideas from the 2026-09-19 review, not yet designed. Pick one, then brainstorm it
 Sparziele (see `docs/superpowers/specs/`). Check each against the product constraints in `CLAUDE.md`
 (kid-sized lesson sentence, no sound, no Spar account, rates parent-configurable, all text via `t()`).
 
-Done: **Sparziele** (spec and plan in `docs/superpowers/`).
+Done: **Sparziele** (spec and plan in `docs/superpowers/`), **Einzahlen/Abheben** (kid picks an amount, a parent confirms with their PIN).
+
+Rejected: **Geld-Wunsch an Mama/Papa**. A real bank doesn't take wishes for money, so we don't teach that.
 
 ## Training wheels
 
 - ~~**Wochen-Rückblick (home card).**~~ Done: rolling 7 days, `ledger.week_summary`, hidden when the week is empty.
 - **"Kann ich mir das leisten?" on transfer.** Show what is left after the transfer and warn when it
   uses most of the balance. Extends the existing before/after line.
-- **Geld-Wunsch an Mama/Papa.** Kid asks a parent for money with a reason; the parent approves or
-  declines. Teaches that money is not automatic. Needs an approval flow (could also serve Sparziele purchases later).
 - **Zinsen-Vorschau on the Giro.** "Wenn du 1 Jahr nichts ausgibst: +X €", or a small growth chart.
   Shows compounding and waiting.
 

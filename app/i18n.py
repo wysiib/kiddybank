@@ -77,6 +77,24 @@ STRINGS = {
         "xfer.lesson": "Bei einer Überweisung geht das Geld von deinem Konto auf das Konto von jemand anderem.",
         "xfer.done": "Geschafft! Das Geld ist angekommen.",
 
+        # cash in / out (real money with a parent, confirmed by the parent's PIN)
+        "home.deposit": "Einzahlen",
+        "home.withdraw": "Abheben",
+        "cash.in.title": "Einzahlen",
+        "cash.out.title": "Abheben",
+        "cash.in.intro": "Du gibst deinen Eltern echtes Geld. Die Bank schreibt es auf dein Konto.",
+        "cash.out.intro": "Du bekommst echtes Geld von deinen Eltern. Die Bank zieht es von deinem Konto ab.",
+        "cash.in.confirm": "Wirklich {amount} einzahlen?",
+        "cash.out.confirm": "Wirklich {amount} abheben?",
+        "cash.in.lesson": "Beim Einzahlen gibst du echtes Geld ab und die Bank schreibt es auf deinem Konto gut. Ab jetzt bekommt es Zinsen!",
+        "cash.out.lesson": "Beim Abheben bekommst du echtes Geld und die Bank zieht es von deinem Konto ab.",
+        "cash.out.interest": "Aber Achtung: Geld auf dem Konto bekommt Zinsen. Wenn du {amount} abhebst, verpasst du {lost} Zinsen {per}.",
+        "cash.out.interest.plain": "Aber Achtung: Geld auf dem Konto bekommt Zinsen. Was du abhebst, bringt dir keine Zinsen mehr.",
+        "cash.pin": "Eltern: bitte gebt euren Geheim-Code ein",
+        "cash.pin.wrong": "Das war nicht der Code von den Eltern.",
+        "cash.in.done": "Eingezahlt! Dein Geld liegt jetzt auf dem Konto.",
+        "cash.out.done": "Abgehoben! Du hast dein Geld bekommen.",
+
         # festgeld
         "fg.title": "Schatztruhe",
         "fg.lesson": "Wenn du dein Geld länger warten lässt, bekommst du mehr Zinsen. Dafür kommst du erst später wieder dran. Das nennt man Festgeld.",

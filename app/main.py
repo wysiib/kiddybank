@@ -331,6 +331,55 @@ def transfer_do(request: Request, to_id: int = Form(...), cents: int = Form(...)
     return render(request, "done.html", user=user, emoji="💸", msg=t("xfer.done"), lesson=t("xfer.lesson"))
 
 
+# --- kid: cash in / out (real money changes hands with a parent, who confirms with their PIN) ---
+
+CASH = ("einzahlen", "abheben")
+
+
+def _cash_page(request: Request, s: Session, user: User, kind: str, cents: int | None = None, error: str | None = None):
+    if kind not in CASH:
+        raise HTTPException(404)
+    giro = ledger.get_account(s, user.id, "giro")
+    lost = ledger.interest_cents(cents or 0, giro.interest_rate_bp, giro.payout_days) if kind == "abheben" else 0
+    return render(request, "cash.html", 400 if error else 200, user=user, giro=giro, kind=kind, cents=cents,
+                  lost=lost, error=error)
+
+
+@app.get("/bar/{kind}")
+def cash_form(request: Request, kind: str, user: User = Depends(kid), s: Session = Depends(get_session)):
+    return _cash_page(request, s, user, kind)
+
+
+@app.post("/bar/{kind}/pruefen")
+def cash_check(request: Request, kind: str, cents: int = Form(0), user: User = Depends(kid),
+               s: Session = Depends(get_session)):
+    giro = ledger.get_account(s, user.id, "giro")
+    if cents <= 0:
+        return _cash_page(request, s, user, kind, error="err.amount")
+    if kind == "abheben" and cents > giro.balance_cents:
+        return _cash_page(request, s, user, kind, error="err.insufficient")
+    return _cash_page(request, s, user, kind, cents)
+
+
+@app.post("/bar/{kind}")
+def cash_do(request: Request, kind: str, cents: int = Form(...), pin: str = Form(...), user: User = Depends(kid),
+            s: Session = Depends(get_session), today: date = Depends(get_today)):
+    giro = ledger.get_account(s, user.id, "giro")
+    parents = s.exec(select(User).where(User.role == "parent")).all()
+    try:
+        if kind not in CASH or cents <= 0:  # a negative amount would flip the direction of the booking
+            raise LedgerError("err.amount")
+        if not any(verify_pin(pin, p.pin_hash) for p in parents):
+            raise LedgerError("cash.pin.wrong")
+        ledger.manual_booking(s, giro, cents if kind == "einzahlen" else -cents, today)
+    except LedgerError as e:
+        s.rollback()
+        return _cash_page(request, s, user, kind if kind in CASH else "einzahlen", cents, e.args[0])
+    key = "in" if kind == "einzahlen" else "out"
+    return render(request, "done.html", user=user, emoji="📥" if key == "in" else "📤", msg=t(f"cash.{key}.done"),
+                  lesson=t(f"cash.{key}.lesson"))
+
+
 # --- kid: festgeld -----------------------------------------------------------------------------
 
 @app.get("/festgeld")
@@ -610,38 +659,6 @@ def add_product(request: Request, name: str = Form(...), days: int = Form(...), 
                 period: int = Form(ledger.DEFAULT_PAYOUT_DAYS), user: User = Depends(parent), s: Session = Depends(get_session)):
     try:
         ledger.add_product(s, name, days, parse_rate(rate, period), period)
-    except LedgerError as e:
-        s.rollback()
-        return _parent_page(request, s, user, e.args[0])
-    return redirect("/eltern")
-
-
-@app.post("/eltern/produkte/{product_id}/loeschen")
-def delete_product(product_id: int, user: User = Depends(parent), s: Session = Depends(get_session)):
-    if p := s.get(FestgeldProduct, product_id):
-        s.delete(p)  # safe: deposits snapshot name, rate and maturity, nothing references the product
-    return redirect("/eltern")
-
-
-@app.post("/eltern/produkte")
-def add_product(request: Request, name: str = Form(...), days: int = Form(...), rate: str = Form(...),
-                period: int = Form(ledger.DEFAULT_PAYOUT_DAYS), user: User = Depends(parent), s: Session = Depends(get_session)):
-    try:
-        ledger.add_product(s, name, days, parse_rate(rate, period), period)
-    except LedgerError as e:
-        s.rollback()
-        return _parent_page(request, s, user, e.args[0])
-    return redirect("/eltern")
-
-
-@app.post("/eltern/produkte/{product_id}")
-def edit_product(request: Request, product_id: int, name: str = Form(...), days: int = Form(...), rate: str = Form(...),
-                 active: str | None = Form(None), user: User = Depends(parent), s: Session = Depends(get_session)):
-    p = s.get(FestgeldProduct, product_id)
-    if not p:
-        raise HTTPException(404)
-    try:
-        ledger.update_product(p, name, days, parse_percent(rate), active is not None)
     except LedgerError as e:
         s.rollback()
         return _parent_page(request, s, user, e.args[0])

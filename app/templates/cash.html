@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "_stepper.html" import stepper %}
+{% block content %}
+{% set out = kind == 'abheben' %}
+{% set key = 'out' if out else 'in' %}
+{% if error %}<p class="error">{{ t(error) }}</p>{% endif %}
+{% if not cents %}
+<h1 class="text-3xl font-extrabold">{{ '📤' if out else '📥' }} {{ t('cash.' ~ key ~ '.title') }}</h1>
+<p class="card text-center text-base text-slate-500">👛 {{ t('acct.giro') }}: <span class="text-2xl font-extrabold text-slate-800">{{ giro.balance_cents|money }}</span></p>
+<p class="lesson">{{ t('cash.' ~ key ~ '.intro') }}</p>
+<form method="post" action="/bar/{{ kind }}/pruefen" class="space-y-6">
+  {{ stepper() }}
+  <button class="btn w-full">{{ t('app.next') }} ➡️</button>
+</form>
+{% else %}
+<div class="card space-y-4 text-center">
+  <div class="text-7xl">{{ '📤' if out else '📥' }}</div>
+  <p class="text-3xl font-extrabold">{{ t('cash.' ~ key ~ '.confirm', amount=cents|money) }}</p>
+  <p class="lesson">{{ t('xfer.before_after', before=giro.balance_cents|money, after=(giro.balance_cents + (-cents if out else cents))|money) }}</p>
+  <p class="lesson">{{ t('cash.' ~ key ~ '.lesson') }}</p>
+  {% if out %}
+  <p class="lesson">{{ t('cash.out.interest', amount=cents|money, lost=lost|money, per=t('per.' ~ giro.payout_days)) if lost else t('cash.out.interest.plain') }}</p>
+  {% endif %}
+</div>
+<form method="post" action="/bar/{{ kind }}" class="space-y-6">
+  <input type="hidden" name="cents" value="{{ cents }}">
+  <input type="hidden" name="pin" value="">
+  <p class="text-center font-bold">{{ t('cash.pin') }}</p>
+  <div class="flex justify-center gap-4 {{ 'shake' if error }}">
+    {% for _ in range(4) %}<span data-dot class="h-8 w-8 rounded-full border-4 border-pink-500"></span>{% endfor %}
+  </div>
+  <div class="mx-auto grid max-w-xs grid-cols-3 gap-3">
+    {% for k in [1,2,3,4,5,6,7,8,9] %}
+    <button type="button" data-key="{{ k }}" class="tile min-h-20 text-3xl">{{ k }}</button>
+    {% endfor %}
+    <a href="/bar/{{ kind }}" class="tile min-h-20 text-3xl" aria-label="{{ t('app.back') }}">↩️</a>
+    <button type="button" data-key="0" class="tile min-h-20 text-3xl">0</button>
+    <button type="button" data-key="back" class="tile min-h-20 text-3xl" aria-label="⌫">⌫</button>
+  </div>
+</form>
+{% endif %}
+{% endblock %}

@@ -38,6 +38,8 @@
 
 <div class="grid grid-cols-2 gap-4">
   <a href="/ueberweisen" class="tile"><span class="text-6xl">💸</span>{{ t('home.transfer') }}</a>
+  <a href="/bar/einzahlen" class="tile"><span class="text-6xl">📥</span>{{ t('home.deposit') }}</a>
+  <a href="/bar/abheben" class="tile"><span class="text-6xl">📤</span>{{ t('home.withdraw') }}</a>
   {% if not top %}<a href="/ziele" class="tile"><span class="text-6xl">🎯</span>{{ t('goal.title') }}</a>{% endif %}
   {% if festgeld_visible %}
   <a href="/festgeld" class="tile"><span class="text-6xl">🧰</span>{{ t('acct.festgeld') }}{% if deposits %} ({{ deposits|length }}){% endif %}</a>

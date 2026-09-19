@@ -309,3 +309,37 @@ def test_edit_dauerauftrag(family):
         r = s.exec(select(main.RecurringRule)).one()
         assert (r.amount_cents, r.interval, r.next_run.day) == (350, "monthly", 15)
     assert 'value="3,50"' in family.get("/eltern").text
+
+
+def giro_cents(uid):
+    with Session(main._engine()) as s:
+        return ledger.get_account(s, uid, "giro").balance_cents
+
+
+def test_cash_in_and_out_need_parent_pin(family):
+    login(family, 2, "1111")
+    mia = account_id(2, "giro")
+
+    r = family.post("/bar/abheben/pruefen", data={"cents": 300})
+    assert "Vorher 10,00 €" in r.text and "Nachher 7,00 €" in r.text
+    assert "verpasst du" in r.text and "Zinsen" in r.text  # withdrawing costs interest, says by how much
+
+    assert "nicht der Code" in family.post("/bar/abheben", data={"cents": 300, "pin": "1111"}).text  # kid's own PIN
+    assert giro_cents(2) == 1000
+    assert "Abgehoben" in family.post("/bar/abheben", data={"cents": 300, "pin": "1234"}).text
+    assert giro_cents(2) == 700
+
+    assert "Nachher 12,00 €" in family.post("/bar/einzahlen/pruefen", data={"cents": 500}).text
+    assert "Eingezahlt" in family.post("/bar/einzahlen", data={"cents": 500, "pin": "1234"}).text
+    assert giro_cents(2) == 1200
+
+    assert family.post("/bar/abheben/pruefen", data={"cents": 99999}).status_code == 400
+    assert family.post("/bar/abheben", data={"cents": 99999, "pin": "1234"}).status_code == 400
+    assert family.post("/bar/einzahlen", data={"cents": -500, "pin": "1234"}).status_code == 400  # must not flip into a withdrawal
+    assert giro_cents(2) == 1200
+    assert family.get("/bar/quatsch").status_code == 404
+
+
+def test_cash_is_kid_only(family):
+    assert family.post("/bar/einzahlen", data={"cents": 100, "pin": "1234"}).status_code == 303  # parent -> /eltern
+    assert giro_cents(2) == 1000
