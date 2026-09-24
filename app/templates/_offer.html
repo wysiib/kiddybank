@@ -1,9 +1,9 @@
 {% from "_coins.html" import stack, calendars %}
 {% set o = view.by_id[p.id] %}
-{% set term = t('fg.days.1') if p.term_days == 1 else t('fg.days', n=p.term_days) %}
+{% set term = t('td.days.1') if p.term_days == 1 else t('td.days', n=p.term_days) %}
 {{ calendars(o.cals, term) }}
 <span class="text-base font-normal">{{ term }}</span>
 <div class="flex min-h-24 items-end justify-center gap-3">
-  <div class="col">{{ stack('small', o.giro_coins) }}<b>{{ o.giro|compact }}</b>{{ t('fg.tower.giro') }}</div>
-  <div class="col">{{ stack('small', o.fg_coins, tone='gold') }}<b>{{ o.fg|compact }}</b>{{ t('fg.tower.fg') }}</div>
+  <div class="col">{{ stack('small', o.checking_coins) }}<b>{{ o.checking|compact }}</b>{{ t('td.tower.checking') }}</div>
+  <div class="col">{{ stack('small', o.td_coins, tone='gold') }}<b>{{ o.td|compact }}</b>{{ t('td.tower.td') }}</div>
 </div>

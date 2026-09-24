@@ -37,7 +37,7 @@ templates.env.filters["date"] = format_date
 templates.env.filters["pct"] = format_percent
 templates.env.filters["per"] = lambda bp, days: format_percent(ledger.period_bp(bp, days))  # annual bp -> "per week/month/year"
 templates.env.globals["slot_fill"] = coins.slot_fill
-templates.env.filters["compact"] = lambda cents: t("fg.cent", n=cents) if cents < 100 else format_money(cents)  # 5 -> "5 Cent", 150 -> "1,50 €"
+templates.env.filters["compact"] = lambda cents: t("td.cent", n=cents) if cents < 100 else format_money(cents)  # 5 -> td.cent, 150 -> "1,50 €"
 
 
 @lru_cache
@@ -98,7 +98,7 @@ def current_user(request: Request, s: Session = db) -> User:
 
 def kid(user: User = Depends(current_user), s: Session = db, today: date = Depends(get_today)) -> User:
     if user.role != "child":
-        raise Redirect("/eltern")
+        raise Redirect("/parent")
     ledger.catch_up_user(s, user.id, today)  # lazy interest / allowance, before anything else happens
     return user
 
@@ -134,7 +134,7 @@ def own_accounts(s: Session, user: User, *types: str) -> list[Account]:
 
 
 def active_deposits(s: Session, user: User) -> list[Account]:
-    return [a for a in own_accounts(s, user, "festgeld") if not a.collected_at]
+    return [a for a in own_accounts(s, user, "term_deposit") if not a.collected_at]
 
 
 def child_or_404(s: Session, uid: int) -> User:

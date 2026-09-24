@@ -5,12 +5,12 @@
 {% if events %}{% include "_celebration.html" %}{% endif %}
 <h1 class="text-4xl font-extrabold">{{ user.avatar }} {{ t('home.hello', name=user.name) }}</h1>
 
-<a href="/konto/{{ giro.id }}" class="card block space-y-2">
+<a href="/account/{{ checking.id }}" class="card block space-y-2">
   <div class="flex items-baseline justify-between">
-    <span class="font-bold">👛 {{ t('acct.giro') }}</span>
-    <span class="text-base text-slate-500">{{ t('acct.giro.sub') }}</span>
+    <span class="font-bold">👛 {{ t('acct.checking') }}</span>
+    <span class="text-base text-slate-500">{{ t('acct.checking.sub') }}</span>
   </div>
-  <div class="text-5xl font-extrabold">{{ giro.balance_cents|money }}</div>
+  <div class="text-5xl font-extrabold">{{ checking.balance_cents|money }}</div>
   {% if payout %}
   <div class="flex items-center gap-3">
     {{ pips(payout.total, payout.on) }}
@@ -23,25 +23,25 @@
 </a>
 
 {% if week %}
-<a href="/konto/{{ giro.id }}" class="card block space-y-2">
+<a href="/account/{{ checking.id }}" class="card block space-y-2">
   <div class="font-bold">📅 {{ t('week.title') }}</div>
   {% for k, cents in week.items() %}
   <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
     <div>
       <span>{{ t('week.' ~ k) }}</span>
-      {% if k == 'zins' %}{{ stack('small', week_pic.coins[k], tone='gold', row=True) }}
+      {% if k == 'interest' %}{{ stack('small', week_pic.coins[k], tone='gold', row=True) }}
       {% else %}{{ stack('big', week_pic.coins[k], row=True) }}{% endif %}
     </div>
     <span class="text-2xl font-extrabold {{ 'text-red-600' if k == 'spent' else 'text-green-600' }}">{{ '-' if k == 'spent' else '+' }}{{ cents|money }}</span>
   </div>
   {% endfor %}
-  <p class="text-sm text-slate-500">{% if week_pic.big %}{{ t('coin.unit', amount=week_pic.big|compact) }}{% endif %}{% if week_pic.big and week.get('zins') %} · {% endif %}{% if week.get('zins') %}{{ t('coin.unit.small', amount=week_pic.small|compact) }}{% endif %}</p>
+  <p class="text-sm text-slate-500">{% if week_pic.big %}{{ t('coin.unit', amount=week_pic.big|compact) }}{% endif %}{% if week_pic.big and week.get('interest') %} · {% endif %}{% if week.get('interest') %}{{ t('coin.unit.small', amount=week_pic.small|compact) }}{% endif %}</p>
   <p class="lesson">{{ t('week.lesson') }}</p>
 </a>
 {% endif %}
 
 {% if top %}
-<a href="/ziele" class="card flex items-center gap-4">
+<a href="/goals" class="card flex items-center gap-4">
   {{ visual(top.goal, top.pct, 'h-20 w-20') }}
   <div class="flex-1 space-y-2">
     <div class="font-bold">🎯 {{ top.goal.name or t('goal.title') }}</div>
@@ -51,13 +51,13 @@
 {% endif %}
 
 <div class="grid grid-cols-2 gap-4">
-  <a href="/ziele" class="tile{% if not festgeld_visible %} col-span-2{% endif %}"><span class="text-6xl">🎯</span>{{ t('goal.title') }}</a>
-  {% if festgeld_visible %}
-  <a href="/festgeld" class="tile"><span class="text-6xl">🧰</span>{{ t('acct.festgeld') }}{% if deposits %} ({{ deposits|length }}){% endif %}</a>
+  <a href="/goals" class="tile{% if not term_deposits_visible %} col-span-2{% endif %}"><span class="text-6xl">🎯</span>{{ t('goal.title') }}</a>
+  {% if term_deposits_visible %}
+  <a href="/term-deposits" class="tile"><span class="text-6xl">🧰</span>{{ t('acct.term_deposit') }}{% if deposits %} ({{ deposits|length }}){% endif %}</a>
   {% endif %}
-  <a href="/bar/einzahlen" class="tile"><span class="text-6xl">📥</span>{{ t('home.deposit') }}</a>
-  <a href="/bar/abheben" class="tile"><span class="text-6xl">📤</span>{{ t('home.withdraw') }}</a>
-  <a href="/ueberweisen" class="tile"><span class="text-6xl">💸</span>{{ t('home.transfer') }}</a>
+  <a href="/cash/deposit" class="tile"><span class="text-6xl">📥</span>{{ t('home.deposit') }}</a>
+  <a href="/cash/withdraw" class="tile"><span class="text-6xl">📤</span>{{ t('home.withdraw') }}</a>
+  <a href="/transfer" class="tile"><span class="text-6xl">💸</span>{{ t('home.transfer') }}</a>
   <a href="/pin" class="tile"><span class="text-6xl">🔑</span>{{ t('home.pin') }}</a>
 </div>
 {% endblock %}

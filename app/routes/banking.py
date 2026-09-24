@@ -1,4 +1,4 @@
-"""The kid's everyday banking: home, statement, transfer, Einzahlen/Abheben."""
+"""The kid's everyday banking: home, statement, transfer, cash deposit and withdrawal."""
 
 from datetime import date
 
@@ -49,22 +49,22 @@ def _interest_hint(acc: Account, today: date) -> tuple[str, dict | None]:
 
 @router.get("/home")
 def home(request: Request, user: User = Depends(kid), s: Session = db, today: date = Depends(get_today)):
-    giro = ledger.get_account(s, user.id, "giro")
-    week = {k: v for k, v in ledger.week_summary(s, giro, today).items() if v}
-    euros = [v for k, v in week.items() if k != "zins"]
+    checking = ledger.get_account(s, user.id, "checking")
+    week = {k: v for k, v in ledger.week_summary(s, checking, today).items() if v}
+    euros = [v for k, v in week.items() if k != "interest"]
     big = coins.coin_unit(euros)
-    small = coins.coin_unit([week.get("zins", 0)], coins.SMALL_LADDER, coins.SMALL_CAP)
+    small = coins.coin_unit([week.get("interest", 0)], coins.SMALL_LADDER, coins.SMALL_CAP)
     week_pic = {"big": big if euros else 0, "small": small,
-                "coins": {k: coins.coins(v, small if k == "zins" else big) for k, v in week.items()}}
+                "coins": {k: coins.coins(v, small if k == "interest" else big) for k, v in week.items()}}
     deposits = active_deposits(s, user)
-    cards = goals.cards([g for g in goals.list_goals(s, user.id) if not g.done_at], giro)
-    hint, payout = _interest_hint(giro, today)
-    return render(request, "home.html", user=user, giro=giro, deposits=deposits, top=max(cards, key=lambda c: c["pct"], default=None), week=week,
+    cards = goals.cards([g for g in goals.list_goals(s, user.id) if not g.done_at], checking)
+    hint, payout = _interest_hint(checking, today)
+    return render(request, "home.html", user=user, checking=checking, deposits=deposits, top=max(cards, key=lambda c: c["pct"], default=None), week=week,
                   week_pic=week_pic,
-                  events=_events(s, user), interest_hint=hint, payout=payout, festgeld_visible=user.festgeld_enabled or bool(deposits))
+                  events=_events(s, user), interest_hint=hint, payout=payout, term_deposits_visible=user.term_deposits_enabled or bool(deposits))
 
 
-@router.post("/gesehen")
+@router.post("/seen")
 def seen(user: User = Depends(kid), s: Session = db, today: date = Depends(get_today)):
     events.mark_seen(s, user.id, today)
     return redirect("/home")
@@ -73,12 +73,12 @@ def seen(user: User = Depends(kid), s: Session = db, today: date = Depends(get_t
 def _describe(s: Session, acc: Account, tx, delta: int) -> tuple[str, str]:
     """(emoji, text) for one statement line."""
     inbound = delta > 0
-    if tx.type in ("zins", "dauerauftrag"):
-        return ("✨" if tx.type == "zins" else "🗓️"), t(f"tx.{tx.type}")
-    if tx.type in ("aktienkauf", "aktienverkauf"):
+    if tx.type in ("interest", "recurring"):
+        return ("✨" if tx.type == "interest" else "🗓️"), t(f"tx.{tx.type}")
+    if tx.type in ("stock_buy", "stock_sell"):
         return "📈", f"{t(f'tx.{tx.type}')} ({tx.note})"
-    if tx.type == "festgeld":
-        return "🧰", t("tx.festgeld.in" if inbound else "tx.festgeld.out")
+    if tx.type == "term_deposit":
+        return "🧰", t("tx.term_deposit.in" if inbound else "tx.term_deposit.out")
     other_id = tx.from_account_id if inbound else tx.to_account_id
     if other_id is None:
         return "👪", tx.note if tx.note else t("tx.parent.in" if inbound else "tx.parent.out")
@@ -92,7 +92,7 @@ def statement_rows(s: Session, acc: Account) -> list[dict]:
             for e, txt in [_describe(s, acc, tx, delta)]]
 
 
-@router.get("/konto/{account_id}")
+@router.get("/account/{account_id}")
 def statement(request: Request, account_id: int, user: User = Depends(kid), s: Session = db):
     acc = s.get(Account, account_id)
     if not acc or acc.user_id != user.id:
@@ -103,26 +103,26 @@ def statement(request: Request, account_id: int, user: User = Depends(kid), s: S
 # --- kid: transfer -----------------------------------------------------------------------------
 
 def _transfer_form(request: Request, s: Session, user: User, error: str | None = None, gap: dict | None = None):
-    targets = [{"id": ledger.get_account(s, u.id, "giro").id, "avatar": u.avatar, "label": u.name}
+    targets = [{"id": ledger.get_account(s, u.id, "checking").id, "avatar": u.avatar, "label": u.name}
                for u in s.exec(select(User).where(User.id != user.id).order_by(User.role.desc(), User.id)).all()]  # type: ignore[attr-defined]
     return render(request, "transfer.html", user=user, targets=targets, error=error, gap=gap,
-                  giro=ledger.get_account(s, user.id, "giro"))
+                  checking=ledger.get_account(s, user.id, "checking"))
 
 
 def _resolve(s: Session, user: User, to_id: int) -> tuple[Account, Account]:
-    """(own giro, someone else's giro). Kids only ever move money out of their own Giro."""
+    """(own checking, someone else's checking). Kids only ever move money out of their own checking account."""
     dst = s.get(Account, to_id)
-    if not dst or dst.type != "giro" or dst.user_id == user.id:
+    if not dst or dst.type != "checking" or dst.user_id == user.id:
         raise HTTPException(403, "err.forbidden")
-    return ledger.get_account(s, user.id, "giro"), dst
+    return ledger.get_account(s, user.id, "checking"), dst
 
 
-@router.get("/ueberweisen")
+@router.get("/transfer")
 def transfer_form(request: Request, user: User = Depends(kid), s: Session = db):
     return _transfer_form(request, s, user)
 
 
-@router.post("/ueberweisen/pruefen")
+@router.post("/transfer/check")
 def transfer_check(request: Request, to_id: int = Form(...), cents: int = Form(0),
                    user: User = Depends(kid), s: Session = db):
     src, dst = _resolve(s, user, to_id)
@@ -141,7 +141,7 @@ def transfer_check(request: Request, to_id: int = Form(...), cents: int = Form(0
                   to_name=s.get(User, dst.user_id).name, tok=issue_token(request, "transfer"))
 
 
-@router.post("/ueberweisen")
+@router.post("/transfer")
 def transfer_do(request: Request, to_id: int = Form(...), cents: int = Form(...), tok: str = Form(""),
                 user: User = Depends(kid), s: Session = db, today: date = Depends(get_today)):
     src, dst = _resolve(s, user, to_id)
@@ -157,55 +157,55 @@ def transfer_do(request: Request, to_id: int = Form(...), cents: int = Form(...)
 
 # --- kid: cash in / out (real money changes hands with a parent, who confirms with their PIN) ---
 
-CASH = ("einzahlen", "abheben")
+CASH = ("deposit", "withdraw")
 
 
 def _cash_page(request: Request, s: Session, user: User, kind: str, cents: int | None = None, error: str | None = None,
                gap: dict | None = None, note: str = ""):
     if kind not in CASH:
         raise HTTPException(404)
-    giro = ledger.get_account(s, user.id, "giro")
-    lost = ledger.interest_cents(cents or 0, giro.interest_rate_bp, giro.payout_days) if kind == "abheben" else 0
+    checking = ledger.get_account(s, user.id, "checking")
+    lost = ledger.interest_cents(cents or 0, checking.interest_rate_bp, checking.payout_days) if kind == "withdraw" else 0
     pic = None
     if cents:  # the confirm step draws what stays, what moves and what interest is given up
         pic = {}
-        if kind == "abheben":
+        if kind == "withdraw":
             pic["small"] = coins.coin_unit([lost], coins.SMALL_LADDER, coins.SMALL_CAP)
             pic["lost_coins"] = coins.coins(lost, pic["small"])
-            shown = min(cents, giro.balance_cents)  # the balance may have changed since the check
-            pic["unit"] = coins.coin_unit([giro.balance_cents])
-            pic["after"] = giro.balance_cents - shown
-            pic["stay"], pic["go"] = coins.split(giro.balance_cents, shown, pic["unit"])
+            shown = min(cents, checking.balance_cents)  # the balance may have changed since the check
+            pic["unit"] = coins.coin_unit([checking.balance_cents])
+            pic["after"] = checking.balance_cents - shown
+            pic["stay"], pic["go"] = coins.split(checking.balance_cents, shown, pic["unit"])
         else:
-            pic["after"] = giro.balance_cents + cents
+            pic["after"] = checking.balance_cents + cents
             pic["unit"] = coins.coin_unit([pic["after"]])
             pic["have"], pic["come"] = coins.split(pic["after"], cents, pic["unit"])
-    return render(request, "cash.html", user=user, giro=giro, kind=kind, cents=cents, pic=pic,
+    return render(request, "cash.html", user=user, checking=checking, kind=kind, cents=cents, pic=pic,
                   lost=lost, error=error, gap=gap, note=note, tok=issue_token(request, "cash") if cents else None)
 
 
-@router.get("/bar/{kind}")
+@router.get("/cash/{kind}")
 def cash_form(request: Request, kind: str, user: User = Depends(kid), s: Session = db):
     return _cash_page(request, s, user, kind)
 
 
-@router.post("/bar/{kind}/pruefen")
+@router.post("/cash/{kind}/check")
 def cash_check(request: Request, kind: str, cents: int = Form(0), note: str = Form(""), user: User = Depends(kid),
                s: Session = db):
-    giro = ledger.get_account(s, user.id, "giro")
+    checking = ledger.get_account(s, user.id, "checking")
     if cents <= 0:
         return _cash_page(request, s, user, kind, error="err.amount", note=note)
-    if kind == "abheben" and cents > giro.balance_cents:
+    if kind == "withdraw" and cents > checking.balance_cents:
         return _cash_page(request, s, user, kind, error="err.insufficient",
-                          gap=coins.shortfall(giro.balance_cents, cents), note=note)
+                          gap=coins.shortfall(checking.balance_cents, cents), note=note)
     return _cash_page(request, s, user, kind, cents, note=note)
 
 
-@router.post("/bar/{kind}")
+@router.post("/cash/{kind}")
 def cash_do(request: Request, kind: str, cents: int = Form(...), pin: str = Form(...), tok: str = Form(""),
             note: str = Form(""), user: User = Depends(kid),
             s: Session = db, today: date = Depends(get_today)):
-    giro = ledger.get_account(s, user.id, "giro")
+    checking = ledger.get_account(s, user.id, "checking")
     parents = s.exec(select(User).where(User.role == "parent")).all()
     try:
         if kind not in CASH:
@@ -219,9 +219,9 @@ def cash_do(request: Request, kind: str, cents: int = Form(...), pin: str = Form
         auth.pin_ok(user)
         if not use_token(request, "cash", tok):  # a double tap: the first request already did it
             return redirect("/home")
-        ledger.manual_booking(s, giro, cents if kind == "einzahlen" else -cents, today, note.strip())
+        ledger.manual_booking(s, checking, cents if kind == "deposit" else -cents, today, note.strip())
     except LedgerError as e:
-        return _cash_page(request, s, user, kind if kind in CASH else "einzahlen", cents, e.args[0], note=note)
-    key = "in" if kind == "einzahlen" else "out"
+        return _cash_page(request, s, user, kind if kind in CASH else "deposit", cents, e.args[0], note=note)
+    key = "in" if kind == "deposit" else "out"
     return render(request, "done.html", user=user, emoji="📥" if key == "in" else "📤", msg=t(f"cash.{key}.done"),
                   lesson=t(f"cash.{key}.lesson"))

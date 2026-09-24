@@ -11,13 +11,13 @@ class User(SQLModel, table=True):
     pin_hash: str
     avatar: str = "🐷"
     # per-kid modules, toggled by a parent; enforced in the routes, existing deposits/holdings stay reachable
-    festgeld_enabled: bool = True
+    term_deposits_enabled: bool = True
     stocks_enabled: bool = True
     pin_failures: int = 0  # consecutive wrong PINs, see auth.pin_failed
     locked_until: datetime | None = None
 
 
-class FestgeldProduct(SQLModel, table=True):
+class TermDepositProduct(SQLModel, table=True):
     """Parent-managed offer. Deposits snapshot name, rate and maturity, so a product can simply be deleted."""
 
     id: int | None = Field(default=None, primary_key=True)
@@ -32,18 +32,18 @@ class Account(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="user.id", index=True)
-    type: str  # giro | festgeld
-    name: str = ""  # festgeld: product name at the time it was opened
+    type: str  # checking | term_deposit
+    name: str = ""  # term_deposit: product name at the time it was opened
     balance_cents: int = 0
-    interest_rate_bp: int = 0  # basis points per year; fixed at opening for festgeld
+    interest_rate_bp: int = 0  # basis points per year; fixed at opening for term_deposit
     allow_overdraft: bool = False
     last_updated: date  # interest accrued up to this day
     interest_accrued: int = 0  # cent * 10000 * 365, exact remainder carried between payouts
     interest_paid_on: date  # last day interest was booked
-    payout_days: int = 7  # giro: days between interest payouts (7/30/365), also the unit the kid sees rates in
-    opened_at: date | None = None  # festgeld only
-    maturity_date: date | None = None  # festgeld only
-    collected_at: datetime | None = None  # festgeld only
+    payout_days: int = 7  # checking: days between interest payouts (7/30/365), also the unit the kid sees rates in
+    opened_at: date | None = None  # term_deposit only
+    maturity_date: date | None = None  # term_deposit only
+    collected_at: datetime | None = None  # term_deposit only
 
 
 class Transaction(SQLModel, table=True):
@@ -54,14 +54,14 @@ class Transaction(SQLModel, table=True):
     from_account_id: int | None = Field(default=None, foreign_key="account.id", index=True)
     to_account_id: int | None = Field(default=None, foreign_key="account.id", index=True)
     amount_cents: int
-    type: str  # manual | dauerauftrag | zins | festgeld | aktienkauf | aktienverkauf
+    type: str  # manual | recurring | interest | term_deposit | stock_buy | stock_sell
     timestamp: datetime
     note: str = ""
     seen_at: datetime | None = None  # drives the celebration screens
 
 
 class Goal(SQLModel, table=True):
-    """Savings goal. Progress is derived from the Giro balance; nothing is reserved."""
+    """Savings goal. Progress is derived from the checking balance; nothing is reserved."""
 
     id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="user.id", index=True)
@@ -72,7 +72,7 @@ class Goal(SQLModel, table=True):
     has_photo: bool = False  # lets pages ask "picture or emoji?" without loading the BLOB (list_goals defers it)
     created_at: datetime
     reached_seen_at: datetime | None = None  # celebration dismissed
-    done_at: datetime | None = None  # kid tapped "Ziel geschafft!"
+    done_at: datetime | None = None  # kid tapped the "goal done" button
 
 
 class RecurringRule(SQLModel, table=True):
@@ -113,10 +113,10 @@ class Holding(SQLModel, table=True):
 
 
 # (table, column, DDL type, SQL to run once after the column was added). Only additive changes:
-# ponytail: no version table, add one if a column ever has to be renamed or dropped.
+# ponytail: no version table, add one if a column ever has to be dropped.
 ADDED_COLUMNS = (
     ("account", "payout_days", "INTEGER NOT NULL DEFAULT 7", None),
-    ("festgeldproduct", "rate_days", "INTEGER NOT NULL DEFAULT 365", None),
+    ("termdepositproduct", "rate_days", "INTEGER NOT NULL DEFAULT 365", None),
     ("user", "pin_failures", "INTEGER NOT NULL DEFAULT 0", None),
     ("user", "locked_until", "DATETIME", None),
     ("goal", "has_photo", "BOOLEAN NOT NULL DEFAULT 0", "UPDATE goal SET has_photo = 1 WHERE photo IS NOT NULL"),
@@ -134,6 +134,32 @@ def _migrate(engine) -> None:
                     conn.exec_driver_sql(after)
 
 
+# Older DBs used German names. Renames only happen if the old name is still there, so they run once.
+RENAMED_TABLES = (("festgeldproduct", "termdepositproduct"),)
+RENAMED_COLUMNS = (("user", "festgeld_enabled", "term_deposits_enabled"),)
+RENAMED_TYPES = (  # (table, old, new) values of the `type` column
+    ("account", "giro", "checking"), ("account", "festgeld", "term_deposit"),
+    ("transaction", "zins", "interest"), ("transaction", "dauerauftrag", "recurring"),
+    ("transaction", "festgeld", "term_deposit"), ("transaction", "aktienkauf", "stock_buy"),
+    ("transaction", "aktienverkauf", "stock_sell"),
+)
+
+
+def _rename(engine) -> None:
+    """Runs before create_all, which would otherwise add a new, empty table next to the old one."""
+    with engine.begin() as conn:
+        columns = lambda table: {row[1] for row in conn.exec_driver_sql(f"PRAGMA table_info(\"{table}\")")}  # noqa: E731
+        for old, new in RENAMED_TABLES:
+            if columns(old):
+                conn.exec_driver_sql(f"ALTER TABLE \"{old}\" RENAME TO \"{new}\"")
+        for table, old, new in RENAMED_COLUMNS:
+            if old in columns(table):
+                conn.exec_driver_sql(f"ALTER TABLE \"{table}\" RENAME COLUMN {old} TO {new}")
+        for table, old, new in RENAMED_TYPES:
+            if "type" in columns(table):
+                conn.exec_driver_sql(f"UPDATE \"{table}\" SET type = ? WHERE type = ?", (new, old))
+
+
 def make_engine(url: str = "sqlite:///kiddybank.db"):
     engine = create_engine(url, connect_args={"check_same_thread": False})
 
@@ -148,6 +174,7 @@ def make_engine(url: str = "sqlite:///kiddybank.db"):
         # writers serialize up front, so lazy catch-up on a GET can't race another request
         conn.exec_driver_sql("BEGIN IMMEDIATE")
 
+    _rename(engine)
     SQLModel.metadata.create_all(engine)
     _migrate(engine)
     return engine

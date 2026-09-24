@@ -2,8 +2,8 @@
 {% from "_stepper.html" import stepper %}
 {% from "_coins.html" import stack, pips %}
 {% block content %}
-<h1 class="text-3xl font-extrabold">🧰 {{ t('fg.title') }} <span class="text-base font-normal text-slate-500">{{ t('acct.festgeld.sub') }}</span></h1>
-<p class="lesson">{{ t('fg.lesson') }}</p>
+<h1 class="text-3xl font-extrabold">🧰 {{ t('td.title') }} <span class="text-base font-normal text-slate-500">{{ t('acct.term_deposit.sub') }}</span></h1>
+<p class="lesson">{{ t('td.lesson') }}</p>
 {% if error %}<p class="error">{{ t(error) }}</p>{% endif %}
 {% if gap %}{% include "_short.html" %}{% endif %}
 
@@ -11,40 +11,40 @@
 <div class="card space-y-3 text-center">
   <p class="text-base text-slate-500">{{ r.acc.name }} · {{ r.acc.interest_rate_bp|per(days) }} % {{ t('per.' ~ days) }}</p>
   <div class="flex items-end justify-center gap-4">
-    <div class="col">{{ stack('big', r.deposit_coins) }}<b>{{ r.acc.balance_cents|money }}</b>{{ t('fg.yours') }}</div>
+    <div class="col">{{ stack('big', r.deposit_coins) }}<b>{{ r.acc.balance_cents|money }}</b>{{ t('td.yours') }}</div>
     <div class="col">
       {% if r.status == 'ready' %}{{ stack('small', r.interest_coins, tone='gold') }}
       {% else %}{{ stack('small', 0, ghost=r.interest_coins, tone='gold') }}{% endif %}
-      <b>+{{ r.payout[1]|compact }}</b>{{ t('fg.extra' if r.status == 'ready' else 'fg.comes') }}
+      <b>+{{ r.payout[1]|compact }}</b>{{ t('td.extra' if r.status == 'ready' else 'td.comes') }}
     </div>
   </div>
   <p class="text-sm text-slate-500">{{ t('coin.unit', amount=r.big|compact) }} · {{ t('coin.unit.small', amount=r.small|compact) }}</p>
   {% if r.status == 'ready' %}
   <div class="pop text-7xl">🎁</div>
-  <p class="text-2xl font-extrabold">{{ t('fg.ready') }}</p>
+  <p class="text-2xl font-extrabold">{{ t('td.ready') }}</p>
   <p class="text-5xl font-extrabold">{{ r.payout[0]|money }}</p>
-  <p class="lesson">{{ t('fg.ready.lesson', interest=r.payout[1]|money) }}</p>
-  <form method="post" action="/festgeld/{{ r.acc.id }}/abholen"><button class="btn w-full">🎉 {{ t('fg.collect') }}</button></form>
+  <p class="lesson">{{ t('td.ready.lesson', interest=r.payout[1]|money) }}</p>
+  <form method="post" action="/term-deposits/{{ r.acc.id }}/collect"><button class="btn w-full">🎉 {{ t('td.collect') }}</button></form>
   {% else %}
   <div class="text-5xl">🔒</div>
   {{ pips(r.pips[0], r.pips[1]) }}
   <p class="text-sm text-slate-500">{{ t('dot.unit.' ~ r.unit) }}</p>
-  <p class="text-2xl font-bold">⏳ {{ t('fg.locked.1') if r.days == 1 else t('fg.locked', n=r.days) }}</p>
-  <p class="lesson">{{ t('fg.locked.lesson') }} {{ t('fg.preview', total=r.payout[0]|money) }}</p>
+  <p class="text-2xl font-bold">⏳ {{ t('td.locked.1') if r.days == 1 else t('td.locked', n=r.days) }}</p>
+  <p class="lesson">{{ t('td.locked.lesson') }} {{ t('td.preview', total=r.payout[0]|money) }}</p>
   {% endif %}
 </div>
 {% else %}
-<p class="lesson">{{ t('fg.none') }}</p>
+<p class="lesson">{{ t('td.none') }}</p>
 {% endfor %}
 
-{% if user.festgeld_enabled %}
-<h2 class="text-2xl font-extrabold">{{ t('fg.open') }}</h2>
-<form method="post" action="/festgeld/oeffnen" class="space-y-6"
-      hx-get="/festgeld/vorschau" hx-trigger="change" hx-target="#preview">
+{% if user.term_deposits_enabled %}
+<h2 class="text-2xl font-extrabold">{{ t('td.open') }}</h2>
+<form method="post" action="/term-deposits/open" class="space-y-6"
+      hx-get="/term-deposits/preview" hx-trigger="change" hx-target="#preview">
   <input type="hidden" name="tok" value="{{ tok }}">
   {{ stepper() }}
   <section class="space-y-3">
-    <h3 class="font-bold">{{ t('fg.term') }}</h3>
+    <h3 class="font-bold">{{ t('td.term') }}</h3>
     <div class="grid grid-cols-3 gap-3">
       {% for p in products %}
       <label class="tile choice">
@@ -53,13 +53,13 @@
         <div id="offer-{{ p.id }}" class="flex flex-col items-center gap-2">{% include "_offer.html" %}</div>
       </label>
       {% else %}
-      <p class="lesson col-span-3">{{ t('fg.no_products') }}</p>
+      <p class="lesson col-span-3">{{ t('td.no_products') }}</p>
       {% endfor %}
     </div>
     {% if products %}{% include "_offer_unit.html" %}{% endif %}
   </section>
   <div id="preview">{% with total = None %}{% include "_preview.html" %}{% endwith %}</div>
-  <button class="btn w-full">🔒 {{ t('fg.start') }}</button>
+  <button class="btn w-full">🔒 {{ t('td.start') }}</button>
 </form>
 {% endif %}
 <a href="/home" class="btn btn-alt">↩️ {{ t('app.back') }}</a>

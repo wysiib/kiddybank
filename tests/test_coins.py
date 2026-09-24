@@ -4,7 +4,7 @@ from app import coins
 def test_a_positive_amount_is_never_zero_coins():
     assert coins.coins(0, 100) == 0
     assert coins.coins(-5, 100) == 0
-    assert coins.coins(3, 5) == 1  # 3 Cent still shows one small coin
+    assert coins.coins(3, 5) == 1  # 3 cents still shows one small coin
     assert coins.coins(1, 100) == 1
     assert coins.coins(150, 100) == 2  # nearest, halves up
     assert coins.coins(149, 100) == 1
@@ -62,6 +62,7 @@ def test_shortfall_always_shows_a_missing_coin():
 
 
 from app import web
+from app.i18n import t
 
 
 def render_macro(name, *args, **kw):
@@ -69,9 +70,9 @@ def render_macro(name, *args, **kw):
 
 
 def test_stack_draws_solid_then_ghost_coins():
-    html = render_macro("stack", "small", 3, ghost=2, tone="gold", label="15 Cent")
+    html = render_macro("stack", "small", 3, ghost=2, tone="gold", label="15 cents")
     assert html.count('<i class="coin"></i>') == 3 and html.count("coin-ghost") == 2
-    assert "stack-gold" in html and 'aria-label="15 Cent"' in html
+    assert "stack-gold" in html and 'aria-label="15 cents"' in html
     assert "stack-row" in render_macro("stack", "big", 1, row=True)
     assert "aria-hidden" in render_macro("stack", "big", 1)  # no label: the printed amount beside it says it
 
@@ -92,7 +93,7 @@ def test_slots_fill_partly():
     html = render_macro("slots", 64)
     assert html.count("slot-on") == 6 and html.count("slot-part") == 1 and "--fill: 40%" in html
     assert render_macro("slots", 100).count("slot-on") == 10
-    assert web.templates.env.filters["compact"](5) == "5 Cent" and web.templates.env.filters["compact"](150) == "1,50 €"
+    assert web.templates.env.filters["compact"](5) == t("td.cent", n=5) and web.templates.env.filters["compact"](150) == "1,50 €"
 
 
 def test_split_coins_always_add_up_to_the_total():

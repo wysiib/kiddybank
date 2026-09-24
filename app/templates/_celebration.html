@@ -1,4 +1,4 @@
-{# Shown once per unseen interest / allowance booking; "Toll!" marks them seen. #}
+{# Shown once per unseen interest / allowance booking; its OK button marks them seen. #}
 {% from "_goal.html" import visual %}
 <div class="fixed inset-0 z-50 overflow-y-auto bg-pink-400 p-6">
   {% include "_confetti.html" %}
@@ -13,12 +13,12 @@
     </div>
     {% else %}
     <div class="pop card w-full space-y-3">
-      <div class="text-7xl">{{ '✨' if e.type == 'zins' else '🎉' }}</div>
+      <div class="text-7xl">{{ '✨' if e.type == 'interest' else '🎉' }}</div>
       <p class="text-3xl font-extrabold">{{ t('cel.' ~ e.type, amount=e.cents|money) }}</p>
       <p class="lesson">{{ t('cel.' ~ e.type ~ '.why') }}</p>
     </div>
     {% endif %}
     {% endfor %}
-    <form method="post" action="/gesehen"><button class="btn bg-white text-pink-600">🎈 {{ t('app.ok') }}</button></form>
+    <form method="post" action="/seen"><button class="btn bg-white text-pink-600">🎈 {{ t('app.ok') }}</button></form>
   </div>
 </div>

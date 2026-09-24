@@ -1,4 +1,4 @@
 <div class="lesson">
-  {% if total %}{{ t('fg.preview', total=total|money) }}{% else %}{{ t('fg.preview.empty') }}{% endif %}
+  {% if total %}{{ t('td.preview', total=total|money) }}{% else %}{{ t('td.preview.empty') }}{% endif %}
 </div>
 {% if oob %}{% for p in products %}<div id="offer-{{ p.id }}" class="flex flex-col items-center gap-2" hx-swap-oob="true">{% include "_offer.html" %}</div>{% endfor %}{% if products %}{% include "_offer_unit.html" %}{% endif %}{% endif %}
