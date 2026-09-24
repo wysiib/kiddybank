@@ -1,6 +1,5 @@
 {% extends "base.html" %}
-{% from "_goal.html" import visual, progress %}
-{% from "_coins.html" import pips, stack %}
+{% from "_coins.html" import calendars, pips, stack %}
 {% block content %}
 {% if events %}{% include "_celebration.html" %}{% endif %}
 <h1 class="text-4xl font-extrabold">{{ user.avatar }} {{ t('home.hello', name=user.name) }}</h1>
@@ -40,13 +39,22 @@
 </a>
 {% endif %}
 
-{% if top %}
-<a href="/goals" class="card flex items-center gap-4">
-  {{ visual(top.goal, top.pct, 'h-20 w-20') }}
-  <div class="flex-1 space-y-2">
-    <div class="font-bold">🎯 {{ top.goal.name or t('goal.title') }}</div>
-    {{ progress(top.pct, top.goal.target_cents) }}
+{% if growth %}
+<a href="/account/{{ checking.id }}" class="card block space-y-3">
+  <div class="font-bold">🌱 {{ t('grow.title') }}</div>
+  <div class="grid grid-cols-3 items-end gap-2">
+    {% for c in growth.cols %}
+    <div class="col">
+      <span class="font-bold text-slate-800">{{ t('grow.h.' ~ c.days) }}</span>
+      {{ calendars(c.cals, t('grow.h.' ~ c.days)) }}
+      <div class="flex min-h-24 items-end gap-1">{{ stack('big', c.now, ghost=c.arriving) }}{{ stack('small', 0, ghost=c.interest_coins) }}</div>
+      <b>{{ c.total|money }}</b>
+      {% if c.interest %}+{{ c.interest|compact }} {{ t('grow.interest') }}{% endif %}
+    </div>
+    {% endfor %}
   </div>
+  <p class="text-sm text-slate-500">{{ t('coin.unit', amount=growth.big|compact) }} · {{ t('coin.unit.small', amount=growth.small|compact) }} · {{ t('cal.unit.' ~ growth.cal) }}</p>
+  <p class="lesson">{{ t('grow.lesson') }}</p>
 </a>
 {% endif %}
 

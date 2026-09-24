@@ -91,6 +91,24 @@ def test_visit_pattern_does_not_change_the_result(s):
     assert run("Daily", range(1, 61)) == run("Once", [60]) == run("Rare", [17, 60])
 
 
+@pytest.mark.parametrize("payout_days,interval,anchor", [(7, "weekly", 4), (30, "weekly", 0), (30, "monthly", 28)])
+def test_projection_matches_what_actually_happens(s, payout_days, interval, anchor):
+    kid = ledger.create_user(s, "Pia", "child", "1111", today=D0, checking_rate_bp=ledger.DEFAULT_CHECKING_BP, payout_days=payout_days)
+    sp = checking(s, kid)
+    ledger.manual_booking(s, sp, 1234, D0)
+    ledger.add_rule(s, sp, 250, interval, anchor % 7, anchor or 1, D0)
+    start = D0 + timedelta(days=10)
+    ledger.ensure_up_to_date(s, sp, start)
+    before, since = sp.balance_cents, s.exec(select(Transaction.id).order_by(Transaction.id.desc())).first()
+    pocket, interest = ledger.projection(s, sp, start, 365)
+    assert ledger.projection(s, sp, start, 365) == (pocket, interest)  # looking changes nothing
+    ledger.ensure_up_to_date(s, sp, start + timedelta(days=365))
+    booked = s.exec(select(Transaction).where(Transaction.id > since)).all()
+    assert pocket == sum(tx.amount_cents for tx in booked if tx.type == "recurring") > 0
+    assert interest == sum(tx.amount_cents for tx in booked if tx.type == "interest") > 0
+    assert sp.balance_cents == before + pocket + interest
+
+
 def test_monthly_and_yearly_payout_periods(s):
     ann = ledger.create_user(s, "Ann", "child", "1111", today=D0, checking_rate_bp=1000, payout_days=30)
     sp = checking(s, ann)

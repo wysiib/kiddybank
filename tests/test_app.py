@@ -8,8 +8,8 @@ from sqlmodel import Session, select
 from markupsafe import escape
 
 from app import auth, goals, ledger, main, market, web
-from app.i18n import t
-from app.models import TermDepositProduct, RecurringRule, Transaction, User
+from app.i18n import format_money, t
+from app.models import Account, TermDepositProduct, RecurringRule, Transaction, User
 
 D0 = date(2026, 1, 1)
 
@@ -329,7 +329,7 @@ def test_goal_home_card_and_celebration_once(family):
     assert "🎯" in family.get("/home").text and "/goals" in family.get("/home").text  # tile before any goal
     add_goal(family, cents=1500)  # 10 EUR of 15 EUR
     home = family.get("/home").text
-    assert "Lego" in home and T("cel.goal") not in home
+    assert "Lego" not in home and T("cel.goal") not in home  # goals live behind the tile: a goal nudges spending
 
     login(family, 1, "1234")
     family.post("/parent/book", data={"account_id": account_id(2, "checking"), "amount": "5,00"})
@@ -398,12 +398,35 @@ def test_home_week_card(family):
     later = family.get("/home").text
     assert T("week.interest") in later and T("week.other") not in later and T("week.spent") not in later
     assert "stack-small" in later  # the interest row uses small coins
-    assert T("coin.unit", amount="") not in later and T("coin.unit.small", amount="") in later and later.count("stack-row") == 1  # no euro row, no big-coin note
+    week = later.split(T("grow.title"))[0]
+    assert T("coin.unit", amount="") not in week and T("coin.unit.small", amount="") in later and later.count("stack-row") == 1  # no euro row, no big-coin note
     with Session(web._engine()) as s:
         for tx in s.exec(select(Transaction)).all():
             s.delete(tx)
         s.commit()
     assert T("week.title") not in family.get("/home").text  # empty week: no card
+
+
+def test_home_growth_card(family):
+    login(family, 2, "1111")  # 10 EUR, no pocket money yet
+    home = family.get("/home").text
+    assert T("grow.title") in home and T("grow.h.7") in home and T("grow.h.365") in home and T("cal.unit.30") in home
+    assert "coin-ghost" in home  # interest still to come is dashed
+    login(family, 1, "1234")
+    family.post("/parent/rules", data={"kid_id": 2, "amount": "2,00", "interval": "weekly", "weekday": 4})
+    login(family, 2, "1111")
+    with Session(web._engine()) as s:
+        pocket, interest = ledger.projection(s, s.get(Account, account_id(2, "checking")), D0, 365)
+    assert pocket == 53 * 200  # Fridays from 2 Jan 2026 through 1 Jan 2027
+    home = family.get("/home").text
+    assert format_money(1000 + pocket + interest) in home
+    assert home.count('stack-big" aria-hidden="true"><i class="coin"></i>') == 3  # today's 10 EUR stays silver in every column
+    with Session(web._engine()) as s:
+        s.get(Account, account_id(2, "checking")).balance_cents = 0
+        for r in s.exec(select(RecurringRule)).all():
+            s.delete(r)
+        s.commit()
+    assert T("grow.title") not in family.get("/home").text  # nothing to grow: no card
 
 
 def test_edit_recurring(family):
@@ -701,7 +724,7 @@ def test_goal_progress_is_ten_slots(family):
     page = family.get("/goals").text
     assert page.count('class="slot slot-on"') == 3 and page.count("slot-part") == 1 and "--fill: 30%" in page
     assert T("goal.slot", amount="3,00 €") in page
-    assert "slot-on" in family.get("/home").text
+    assert "slot-on" not in family.get("/home").text  # no goal card on home
 
 
 def test_manifest_names_the_app_in_the_locale(client):

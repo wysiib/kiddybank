@@ -15,8 +15,8 @@ Done: **Coin visuals** (explanations as coins, calendars and slots instead of se
 - ~~**Weekly review (home card).**~~ Done: rolling 7 days, `ledger.week_summary`, hidden when the week is empty.
 - **"Can I afford this?" on transfer.** Show what is left after the transfer and warn when it
   uses most of the balance. Extends the existing before/after line.
-- **Interest preview on the checking account.** "If you spend nothing for a year: +X €", or a small growth chart.
-  Shows compounding and waiting.
+- ~~**Interest preview on the checking account.**~~ Done: home card "Wenn du wartest", 1 week / 1 month / 1 year
+  with pocket money and interest (`ledger.projection`). It replaced the goal card on home: a goal nudges spending.
 
 ## Better understanding
 

@@ -47,6 +47,28 @@ def _interest_hint(acc: Account, today: date) -> tuple[str, dict | None]:
         {"total": total, "on": max(0, total - -(-days // unit)), "cents": cents, "unit": unit}
 
 
+GROWTH_DAYS = (7, 30, 365)
+
+
+def _growth(s: Session, checking: Account, today: date) -> dict | None:
+    """The 'if you wait' card: per horizon today's money, the pocket money still to come and the interest, all columns on
+    one coin and one calendar unit so they compare. None when there is nothing to show."""
+    have = max(checking.balance_cents, 0)
+    rows = [(d, *ledger.projection(s, checking, today, d)) for d in GROWTH_DAYS]
+    if not have and not any(pocket or interest for _, pocket, interest in rows):
+        return None
+    big = coins.coin_unit([have + pocket for _, pocket, _ in rows])
+    small = coins.coin_unit([interest for *_, interest in rows], coins.SMALL_LADDER, coins.SMALL_CAP)
+    cal = coins.time_unit(GROWTH_DAYS[-1])
+    cols = []
+    for d, pocket, interest in rows:
+        now = coins.coins(have, big)  # today's money always shows as silver, even when it rounds below one shared coin
+        arriving = max(coins.coins(have + pocket, big) - now, 1 if pocket else 0)
+        cols.append({"days": d, "cals": coins.time_units(d, cal), "now": now, "arriving": arriving,
+                     "interest_coins": coins.coins(interest, small), "interest": interest, "total": have + pocket + interest})
+    return {"big": big, "small": small, "cal": cal, "cols": cols}
+
+
 @router.get("/home")
 def home(request: Request, user: User = Depends(kid), s: Session = db, today: date = Depends(get_today)):
     checking = ledger.get_account(s, user.id, "checking")
@@ -57,9 +79,8 @@ def home(request: Request, user: User = Depends(kid), s: Session = db, today: da
     week_pic = {"big": big if euros else 0, "small": small,
                 "coins": {k: coins.coins(v, small if k == "interest" else big) for k, v in week.items()}}
     deposits = active_deposits(s, user)
-    cards = goals.cards([g for g in goals.list_goals(s, user.id) if not g.done_at], checking)
     hint, payout = _interest_hint(checking, today)
-    return render(request, "home.html", user=user, checking=checking, deposits=deposits, top=max(cards, key=lambda c: c["pct"], default=None), week=week,
+    return render(request, "home.html", user=user, checking=checking, deposits=deposits, week=week, growth=_growth(s, checking, today),
                   week_pic=week_pic,
                   events=_events(s, user), interest_hint=hint, payout=payout, term_deposits_visible=user.term_deposits_enabled or bool(deposits))
 

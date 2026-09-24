@@ -129,33 +129,68 @@ def manual_booking(s: Session, acc: Account, cents: int, today: date, note: str 
 
 # --- lazy catch-up -----------------------------------------------------------------------------
 
+def _replay(acc: Account, rules, until: date) -> tuple[list[tuple[datetime, str, int]], dict]:
+    """What a scheduler would have done from acc.last_updated to `until`, in date order: interest payouts (every
+    payout_days from interest_paid_on) and allowance runs. Pure: returns the bookings and the end state, changes nothing.
+    Rules are always paid by a parent (add_rule), so every allowance run happens."""
+    balance, accrued, paid_on, last = acc.balance_cents, acc.interest_accrued, acc.interest_paid_on, acc.last_updated
+    runs = {r.id: r.next_run for r in rules}
+    bookings = []
+
+    def accrue(day: date) -> None:
+        nonlocal accrued, last
+        if day > last:
+            if balance > 0:
+                accrued += balance * acc.interest_rate_bp * (day - last).days
+            last = day
+
+    while True:
+        payout_day = paid_on + timedelta(days=acc.payout_days)
+        rule = min(rules, key=lambda r: runs[r.id], default=None)
+        if rule and runs[rule.id] < payout_day:  # on the same day the interest (00:00) comes before the allowance (08:00)
+            day = runs[rule.id]
+        else:
+            day, rule = payout_day, None
+        if day > until:
+            break
+        accrue(day)
+        if rule:
+            bookings.append((datetime.combine(day, time(8)), "recurring", rule.amount_cents))
+            balance += rule.amount_cents
+            runs[rule.id] = _next_run(day, rule.interval)
+        else:
+            cents = _round_cents(accrued)
+            accrued -= cents * INTEREST_DENOM  # carry may be slightly negative after rounding up
+            paid_on = day
+            if cents:
+                bookings.append((datetime.combine(day, time(0)), "interest", cents))
+                balance += cents
+    accrue(until)
+    return bookings, {"accrued": accrued, "paid_on": paid_on, "last": last, "runs": runs}
+
+
+def _rules(s: Session, acc: Account) -> list[RecurringRule]:
+    return list(s.exec(select(RecurringRule).where(RecurringRule.to_account_id == acc.id)).all())
+
+
 def ensure_up_to_date(s: Session, acc: Account, today: date) -> None:
-    """Replay what a scheduler would have done since the last visit, in date order: interest payouts (every
-    payout_days from interest_paid_on) and allowance runs. Nothing can change a balance without passing here first,
+    """Book what _replay computed since the last visit. Nothing can change a balance without passing here first,
     so the balance was constant in between and each period's interest is exact and compounds like the real thing."""
     if acc.type == "term_deposit":
         return
-    rules = s.exec(select(RecurringRule).where(RecurringRule.to_account_id == acc.id)).all()
-    src = {r.id: s.get(Account, r.from_account_id) if r.from_account_id else None for r in rules}
-    while True:
-        payout_day = acc.interest_paid_on + timedelta(days=acc.payout_days)
-        rule = min(rules, key=lambda r: r.next_run, default=None)
-        if rule and rule.next_run < payout_day:  # on the same day the interest (00:00) comes before the allowance (08:00)
-            day = rule.next_run
-        else:
-            day, rule = payout_day, None
-        if day > today:
-            break
-        _accrue(acc, day)
-        if rule:
-            try:
-                _post(s, src[rule.id], acc, rule.amount_cents, "recurring", datetime.combine(day, time(8)))
-            except LedgerError:
-                pass  # ponytail: payer lacks funds, that occurrence is skipped
-            rule.next_run = _next_run(day, rule.interval)
-        else:
-            _pay_interest(s, acc, day)
-    _accrue(acc, today)
+    rules = _rules(s, acc)
+    bookings, st = _replay(acc, rules, today)
+    for when, type, cents in bookings:
+        _post(s, None, acc, cents, type, when)
+    acc.interest_accrued, acc.interest_paid_on, acc.last_updated = st["accrued"], st["paid_on"], st["last"]
+    for r in rules:
+        r.next_run = st["runs"][r.id]
+
+
+def projection(s: Session, acc: Account, today: date, days: int) -> tuple[int, int]:
+    """(pocket money, interest) the account would get in the next `days` if nothing is spent. Call after catch-up."""
+    bookings, _ = _replay(acc, _rules(s, acc), today + timedelta(days=days))
+    return (sum(c for _, k, c in bookings if k == "recurring"), sum(c for _, k, c in bookings if k == "interest"))
 
 
 def catch_up_user(s: Session, user_id: int, today: date) -> None:
@@ -170,23 +205,6 @@ def _round_cents(units: int) -> int:
 
 def interest_cents(cents: int, rate_bp: int, days: int) -> int:
     return _round_cents(cents * rate_bp * days)
-
-
-def _accrue(acc: Account, day: date) -> None:
-    days = (day - acc.last_updated).days
-    if days <= 0:
-        return
-    if acc.balance_cents > 0:
-        acc.interest_accrued += acc.balance_cents * acc.interest_rate_bp * days
-    acc.last_updated = day
-
-
-def _pay_interest(s: Session, acc: Account, day: date) -> None:
-    cents = _round_cents(acc.interest_accrued)
-    acc.interest_accrued -= cents * INTEREST_DENOM  # carry may be slightly negative after rounding up
-    acc.interest_paid_on = day
-    if cents:
-        _post(s, None, acc, cents, "interest", datetime.combine(day, time(0)))
 
 
 def next_interest(acc: Account, today: date) -> tuple[int, int]:

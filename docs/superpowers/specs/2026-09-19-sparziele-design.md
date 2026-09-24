@@ -45,7 +45,7 @@ logic. They `flush` but never `commit`, and raise `LedgerError("i18n.key")`.
 | `POST /gesehen` (existing) | "Toll!" now also sets `reached_seen_at` on reached goals, so one celebration screen has one dismiss |
 | `GET /ziele/{id}/bild` | Photo bytes. Owner or a parent, else 404 |
 
-Home (`home.html`): a card with the nearest active goal's picture and bar (a plain "Sparziele" tile with the 🎯 emoji when the kid has no active goal); reached-and-unseen goals show the existing pink confetti screen. `_celebration.html` has a `goal` event type next to `zins` / `dauerauftrag`, showing the goal picture, "Du hast dein Ziel erreicht!" (`cel.goal`), and the goal name on its own line when there is one.
+Home (`home.html`) (**2026-09-24: the goal card was removed by owner decision, a goal nudges spending; goals live behind the 🎯 tile, the celebration stays on home**): a card with the nearest active goal's picture and bar (a plain "Sparziele" tile with the 🎯 emoji when the kid has no active goal); reached-and-unseen goals show the existing pink confetti screen. `_celebration.html` has a `goal` event type next to `zins` / `dauerauftrag`, showing the goal picture, "Du hast dein Ziel erreicht!" (`cel.goal`), and the goal name on its own line when there is one.
 
 Parents: `/eltern` lists each kid's goals read-only (photo, name, target, progress).
 
