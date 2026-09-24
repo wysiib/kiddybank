@@ -3,12 +3,12 @@
 from datetime import date
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from sqlmodel import Session, select
 
-from .. import auth, festgeld, ledger
+from .. import auth, ledger, term_deposit
 from ..auth import hash_pin, verify_pin
-from ..i18n import t
+from ..i18n import LOCALE, t
 from ..ledger import LedgerError
 from ..models import User
 from ..web import BASE, db, get_today, kid, redirect, render, sign_in, valid_pin
@@ -25,7 +25,7 @@ def index(request: Request, s: Session = db):
     user = s.get(User, request.session.get("uid") or 0)
     if not user:
         return redirect("/login")
-    return redirect("/eltern" if user.role == "parent" else "/home")
+    return redirect("/parent" if user.role == "parent" else "/home")
 
 
 @router.get("/setup")
@@ -47,9 +47,9 @@ def setup(request: Request, name: str = Form(...), pin: str = Form(...), s: Sess
     except LedgerError as e:
         return render(request, "setup.html", 400, error=e.args[0])
     u = ledger.create_user(s, name.strip(), "parent", pin, "👪", today)
-    festgeld.seed_default_products(s)
+    term_deposit.seed_default_products(s)
     sign_in(request, u)
-    return redirect("/eltern")
+    return redirect("/parent")
 
 
 @router.get("/login")
@@ -84,7 +84,7 @@ def pin_submit(request: Request, uid: int, pin: str = Form(...), s: Session = db
 # Three keypad screens, no server state: the old PIN (and later the new one) travels in hidden fields and the
 # last step checks the old PIN again, so a forged request cannot skip it.
 
-PIN_STEPS = {"old": "/pin/neu", "new": "/pin/pruefen", "again": "/pin/aendern"}
+PIN_STEPS = {"old": "/pin/new", "new": "/pin/check", "again": "/pin/change"}
 
 
 def _pin_page(request: Request, user: User, step: str, error: str | None = None, **carry: str):
@@ -106,14 +106,14 @@ def pin_change_form(request: Request, user: User = Depends(kid)):
     return _pin_page(request, user, "old")
 
 
-@router.post("/pin/neu")
+@router.post("/pin/new")
 def pin_change_old(request: Request, pin: str = Form(...), user: User = Depends(kid)):
     if error := _old_pin_error(user, pin):
         return _pin_page(request, user, "old", error)
     return _pin_page(request, user, "new", old=pin)
 
 
-@router.post("/pin/pruefen")
+@router.post("/pin/check")
 def pin_change_new(request: Request, old: str = Form(...), pin: str = Form(...), user: User = Depends(kid)):
     try:
         valid_pin(pin)
@@ -124,7 +124,7 @@ def pin_change_new(request: Request, old: str = Form(...), pin: str = Form(...),
     return _pin_page(request, user, "again", old=old, new=pin)
 
 
-@router.post("/pin/aendern")
+@router.post("/pin/change")
 def pin_change_do(request: Request, old: str = Form(...), new: str = Form(...), pin: str = Form(...),
                   user: User = Depends(kid)):
     if error := _old_pin_error(user, old):
@@ -154,3 +154,12 @@ def offline(request: Request):
 def service_worker():
     # served from the root so its scope covers the whole app
     return FileResponse(BASE / "static" / "sw.js", media_type="text/javascript", headers={"Cache-Control": "no-cache"})
+
+
+@router.get("/manifest.webmanifest")
+def manifest():
+    # a route, not a static file, so the installed app's name follows the locale
+    icon = lambda n: {"src": f"/static/icon-{n}.png", "sizes": f"{n}x{n}", "type": "image/png", "purpose": "any maskable"}  # noqa: E731
+    return JSONResponse({"name": t("app.title"), "short_name": t("app.title"), "lang": LOCALE, "start_url": "/", "scope": "/",
+                         "display": "standalone", "background_color": "#fffbeb", "theme_color": "#ec4899",
+                         "icons": [icon(192), icon(512)]}, media_type="application/manifest+json")

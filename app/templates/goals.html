@@ -11,14 +11,14 @@
   {{ visual(c.goal, c.pct, 'h-48 w-48') }}
   {% if c.goal.name %}<p class="text-2xl font-extrabold">{{ c.goal.name }}</p>{% endif %}
   {{ progress(c.pct, c.goal.target_cents) }}
-  <p class="text-lg text-slate-500">{{ giro.balance_cents|money }} / {{ c.goal.target_cents|money }}</p>
+  <p class="text-lg text-slate-500">{{ checking.balance_cents|money }} / {{ c.goal.target_cents|money }}</p>
   {% if c.reached %}
   <p class="text-2xl font-extrabold">{{ t('goal.reached') }}</p>
-  <form method="post" action="/ziele/{{ c.goal.id }}/geschafft"><button class="btn w-full">🎉 {{ t('goal.finish') }}</button></form>
+  <form method="post" action="/goals/{{ c.goal.id }}/done"><button class="btn w-full">🎉 {{ t('goal.finish') }}</button></form>
   {% else %}
-  <p class="text-2xl font-bold">{{ t('goal.left', amount=(c.goal.target_cents - giro.balance_cents)|money) }}</p>
+  <p class="text-2xl font-bold">{{ t('goal.left', amount=(c.goal.target_cents - checking.balance_cents)|money) }}</p>
   {% endif %}
-  <form method="post" action="/ziele/{{ c.goal.id }}/loeschen"><button class="btn btn-alt">🗑️ {{ t('goal.delete') }}</button></form>
+  <form method="post" action="/goals/{{ c.goal.id }}/delete"><button class="btn btn-alt">🗑️ {{ t('goal.delete') }}</button></form>
 </div>
 {% else %}
 <p class="card text-center">{{ t('goal.none') }}</p>
@@ -26,7 +26,7 @@
 
 {% if can_add %}
 <h2 class="text-2xl font-extrabold">{{ t('goal.new') }}</h2>
-<form method="post" action="/ziele" enctype="multipart/form-data" class="space-y-6">
+<form method="post" action="/goals" enctype="multipart/form-data" class="space-y-6">
   <section class="space-y-3 text-center">
     <label class="btn w-full cursor-pointer">📷 {{ t('goal.photo') }}
       <input type="file" name="photo" accept="image/*" class="sr-only" data-photo>

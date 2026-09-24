@@ -28,7 +28,7 @@ def period_bp(annual: int, days: int) -> int:
 
 # Defaults only, everything below is editable by a parent. Deliberately high for kids: 10 EUR must
 # visibly earn something within a week.
-DEFAULT_GIRO_BP = annual_bp(100, 7)  # 1 % per week
+DEFAULT_CHECKING_BP = annual_bp(100, 7)  # 1 % per week
 MAX_RATE_BP = annual_bp(10_000, 7)  # 100 % per week
 
 
@@ -42,24 +42,24 @@ def check_rate(rate_bp: int, days: int = DEFAULT_PAYOUT_DAYS) -> None:
 
 
 def create_user(s: Session, name: str, role: str, pin: str, avatar: str = "🐷", today: date | None = None,
-                giro_rate_bp: int = DEFAULT_GIRO_BP, payout_days: int = DEFAULT_PAYOUT_DAYS) -> User:
+                checking_rate_bp: int = DEFAULT_CHECKING_BP, payout_days: int = DEFAULT_PAYOUT_DAYS) -> User:
     today = today or date.today()
-    rate = giro_rate_bp if role == "child" else 0  # a parent's account is not part of the interest lesson
+    rate = checking_rate_bp if role == "child" else 0  # a parent's account is not part of the interest lesson
     check_rate(rate, payout_days)
     u = User(name=name, role=role, pin_hash=hash_pin(pin), avatar=avatar)
     s.add(u)
     s.flush()
-    s.add(Account(user_id=u.id, type="giro", interest_rate_bp=rate, payout_days=payout_days,
+    s.add(Account(user_id=u.id, type="checking", interest_rate_bp=rate, payout_days=payout_days,
                      last_updated=today, interest_paid_on=today))
     s.flush()
     return u
 
 
-def set_giro_rate(s: Session, giro: Account, rate_bp: int, today: date, payout_days: int | None = None) -> None:
-    payout_days = payout_days or giro.payout_days
+def set_checking_rate(s: Session, checking: Account, rate_bp: int, today: date, payout_days: int | None = None) -> None:
+    payout_days = payout_days or checking.payout_days
     check_rate(rate_bp, payout_days)
-    ensure_up_to_date(s, giro, today)  # settle interest at the old rate first
-    giro.interest_rate_bp, giro.payout_days = rate_bp, payout_days
+    ensure_up_to_date(s, checking, today)  # settle interest at the old rate first
+    checking.interest_rate_bp, checking.payout_days = rate_bp, payout_days
 
 
 def kids(s: Session) -> list[User]:
@@ -115,8 +115,8 @@ def _post(s: Session, from_acc: Account | None, to_acc: Account | None, cents: i
 def transfer(s: Session, from_acc: Account, to_acc: Account, cents: int, today: date) -> Transaction:
     if from_acc.id == to_acc.id:
         raise LedgerError("err.same_account")
-    if "festgeld" in (from_acc.type, to_acc.type):
-        raise LedgerError("err.festgeld_locked")
+    if "term_deposit" in (from_acc.type, to_acc.type):
+        raise LedgerError("err.term_deposit_locked")
     return post(s, from_acc, to_acc, cents, "manual", today)
 
 
@@ -133,7 +133,7 @@ def ensure_up_to_date(s: Session, acc: Account, today: date) -> None:
     """Replay what a scheduler would have done since the last visit, in date order: interest payouts (every
     payout_days from interest_paid_on) and allowance runs. Nothing can change a balance without passing here first,
     so the balance was constant in between and each period's interest is exact and compounds like the real thing."""
-    if acc.type == "festgeld":
+    if acc.type == "term_deposit":
         return
     rules = s.exec(select(RecurringRule).where(RecurringRule.to_account_id == acc.id)).all()
     src = {r.id: s.get(Account, r.from_account_id) if r.from_account_id else None for r in rules}
@@ -149,7 +149,7 @@ def ensure_up_to_date(s: Session, acc: Account, today: date) -> None:
         _accrue(acc, day)
         if rule:
             try:
-                _post(s, src[rule.id], acc, rule.amount_cents, "dauerauftrag", datetime.combine(day, time(8)))
+                _post(s, src[rule.id], acc, rule.amount_cents, "recurring", datetime.combine(day, time(8)))
             except LedgerError:
                 pass  # ponytail: payer lacks funds, that occurrence is skipped
             rule.next_run = _next_run(day, rule.interval)
@@ -186,7 +186,7 @@ def _pay_interest(s: Session, acc: Account, day: date) -> None:
     acc.interest_accrued -= cents * INTEREST_DENOM  # carry may be slightly negative after rounding up
     acc.interest_paid_on = day
     if cents:
-        _post(s, None, acc, cents, "zins", datetime.combine(day, time(0)))
+        _post(s, None, acc, cents, "interest", datetime.combine(day, time(0)))
 
 
 def next_interest(acc: Account, today: date) -> tuple[int, int]:
@@ -210,11 +210,11 @@ def _rule_anchor(interval: str, weekday: int, monthday: int) -> int:
     return weekday if interval == "weekly" else monthday
 
 
-def add_rule(s: Session, giro: Account, cents: int, interval: str, weekday: int, monthday: int, today: date) -> RecurringRule:
-    """Pocket money from the virtual parent into `giro`, first paid on the next chosen weekday / day of the month."""
+def add_rule(s: Session, checking: Account, cents: int, interval: str, weekday: int, monthday: int, today: date) -> RecurringRule:
+    """Pocket money from the virtual parent into `checking`, first paid on the next chosen weekday / day of the month."""
     check_amount(cents)
     anchor = _rule_anchor(interval, weekday, monthday)
-    r = RecurringRule(from_account_id=None, to_account_id=giro.id, amount_cents=cents, interval=interval,
+    r = RecurringRule(from_account_id=None, to_account_id=checking.id, amount_cents=cents, interval=interval,
                       next_run=first_run(interval, anchor, today))
     s.add(r)
     s.flush()
@@ -252,16 +252,16 @@ def statement(s: Session, acc: Account, limit: int = 50) -> list[tuple[Transacti
     return rows
 
 
-def week_summary(s: Session, giro: Account, today: date) -> dict[str, int]:
-    """Cents in / out of the Giro over the last 7 days (today + 6), for the home card.
-    Festgeld moves are saving, not income or spending, so they are left out."""
+def week_summary(s: Session, checking: Account, today: date) -> dict[str, int]:
+    """Cents in / out of the checking account over the last 7 days (today + 6), for the home card.
+    Term deposit moves are saving, not income or spending, so they are left out."""
     since = datetime.combine(today - timedelta(days=6), time(0))  # no upper bound: nothing is stamped after today
-    out = {"dauerauftrag": 0, "zins": 0, "other": 0, "spent": 0}
+    out = {"recurring": 0, "interest": 0, "other": 0, "spent": 0}
     for tx in s.exec(select(Transaction).where(
-            (Transaction.from_account_id == giro.id) | (Transaction.to_account_id == giro.id),
-            Transaction.timestamp >= since, Transaction.type != "festgeld")).all():
-        if tx.to_account_id == giro.id:
-            out[tx.type if tx.type in ("zins", "dauerauftrag") else "other"] += tx.amount_cents
+            (Transaction.from_account_id == checking.id) | (Transaction.to_account_id == checking.id),
+            Transaction.timestamp >= since, Transaction.type != "term_deposit")).all():
+        if tx.to_account_id == checking.id:
+            out[tx.type if tx.type in ("interest", "recurring") else "other"] += tx.amount_cents
         else:
             out["spent"] += tx.amount_cents
     return out

@@ -18,8 +18,8 @@
   <label class="block w-40">&nbsp;{{ period_select(days) }}</label>
 </div>
 {% endmacro %}
-{% macro module_boxes(festgeld, stocks) %}
-<label class="flex items-center gap-2"><input type="checkbox" name="festgeld" {{ 'checked' if festgeld }}> {{ t('par.module.festgeld') }}</label>
+{% macro module_boxes(term_deposits, stocks) %}
+<label class="flex items-center gap-2"><input type="checkbox" name="term_deposits" {{ 'checked' if term_deposits }}> {{ t('par.module.term_deposit') }}</label>
 <label class="flex items-center gap-2"><input type="checkbox" name="stocks" {{ 'checked' if stocks }}> {{ t('par.module.stocks') }}</label>
 {% endmacro %}
 {% block content %}
@@ -30,18 +30,18 @@
   <h2 class="text-2xl font-extrabold">{{ t('par.kids') }}</h2>
   {% for k in kids %}
   <div class="card space-y-3">
-    <div class="flex items-center gap-4"><span class="text-4xl">{{ k.avatar }}</span><span class="flex-1 font-bold">{{ k.name }}</span><a href="/eltern/kinder/{{ k.id }}/konto" class="btn btn-alt">📒 {{ t('stmt.title') }}</a></div>
-    <form method="post" action="/eltern/kinder/{{ k.id }}" class="flex flex-wrap items-center gap-4">
-      {% set g = giros[k.id] %}
+    <div class="flex items-center gap-4"><span class="text-4xl">{{ k.avatar }}</span><span class="flex-1 font-bold">{{ k.name }}</span><a href="/parent/kids/{{ k.id }}/account" class="btn btn-alt">📒 {{ t('stmt.title') }}</a></div>
+    <form method="post" action="/parent/kids/{{ k.id }}" class="flex flex-wrap items-center gap-4">
+      {% set g = checking_accounts[k.id] %}
       {{ rate_row(g.interest_rate_bp, g.payout_days) }}
       <p class="lesson w-full">{{ t('par.rate.hint') }} {{ t('par.rate.annual', pct=g.interest_rate_bp|pct) }}</p>
       <div class="w-full">{{ avatar_picker(k.avatar, 'text-3xl') }}</div>
-      {{ module_boxes(k.festgeld_enabled, k.stocks_enabled) }}
+      {{ module_boxes(k.term_deposits_enabled, k.stocks_enabled) }}
       <button class="btn btn-alt">{{ t('app.save') }}</button>
     </form>
     <details>
       <summary class="cursor-pointer font-bold">🔑 {{ t('par.pin.reset') }}</summary>
-      <form method="post" action="/eltern/kinder/{{ k.id }}/pin" class="mt-3 flex flex-wrap items-end gap-3">
+      <form method="post" action="/parent/kids/{{ k.id }}/pin" class="mt-3 flex flex-wrap items-end gap-3">
         <label class="block">{{ t('par.pin') }}<input class="input" name="pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" required></label>
         <button class="btn btn-alt">{{ t('par.pin.reset') }}</button>
         <p class="lesson w-full">{{ t('par.pin.reset.hint') }}</p>
@@ -57,7 +57,7 @@
           <div>{{ '✅ ' if c.goal.done_at }}{{ c.goal.name ~ ' · ' if c.goal.name }}{{ c.goal.target_cents|money }}</div>
           {{ progress(c.pct, c.goal.target_cents) }}
         </div>
-        <form method="post" action="/eltern/ziele/{{ c.goal.id }}/loeschen"><button class="btn btn-alt">🗑️ {{ t('goal.delete') }}</button></form>
+        <form method="post" action="/parent/goals/{{ c.goal.id }}/delete"><button class="btn btn-alt">🗑️ {{ t('goal.delete') }}</button></form>
       </div>
       {% endfor %}
     </div>
@@ -66,7 +66,7 @@
   {% endfor %}
   <details>
   <summary class="btn btn-alt cursor-pointer">{{ t('par.add_kid') }}</summary>
-  <form method="post" action="/eltern/kinder" class="card mt-3 space-y-3">
+  <form method="post" action="/parent/kids" class="card mt-3 space-y-3">
     <label class="block">{{ t('par.name') }}<input class="input" name="name" required></label>
     <label class="block">{{ t('par.pin') }}<input class="input" name="pin" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" required></label>
     {{ rate_row(default_rate, default_days) }}
@@ -82,14 +82,14 @@
   <h2 class="text-2xl font-extrabold">{{ t('par.products') }}</h2>
   <p class="lesson">{{ t('par.product.hint') }}</p>
   {% for p in products %}
-  <form method="post" action="/eltern/produkte/{{ p.id }}/loeschen" class="card flex items-center gap-3">
-    <span class="flex-1 font-bold">{{ p.name }} · {{ t('fg.days.1') if p.term_days == 1 else t('fg.days', n=p.term_days) }} · {{ p.rate_bp|per(p.rate_days) }} % {{ t('per.' ~ p.rate_days) }}{{ ' (' ~ t('par.rate.annual', pct=p.rate_bp|pct) ~ ')' if p.rate_days != 365 }}</span>
+  <form method="post" action="/parent/products/{{ p.id }}/delete" class="card flex items-center gap-3">
+    <span class="flex-1 font-bold">{{ p.name }} · {{ t('td.days.1') if p.term_days == 1 else t('td.days', n=p.term_days) }} · {{ p.rate_bp|per(p.rate_days) }} % {{ t('per.' ~ p.rate_days) }}{{ ' (' ~ t('par.rate.annual', pct=p.rate_bp|pct) ~ ')' if p.rate_days != 365 }}</span>
     <button class="btn btn-alt">{{ t('par.product.delete') }}</button>
   </form>
   {% endfor %}
   <details>
   <summary class="btn btn-alt cursor-pointer">{{ t('par.product.add') }}</summary>
-  <form method="post" action="/eltern/produkte" class="card mt-3 flex flex-wrap items-end gap-3">
+  <form method="post" action="/parent/products" class="card mt-3 flex flex-wrap items-end gap-3">
     <label class="block flex-1">{{ t('par.product.name') }}<input class="input" name="name" required></label>
     <label class="block w-28">{{ t('par.product.days') }}<input class="input" name="days" type="number" min="1" required></label>
     <label class="block w-28">{{ t('par.product.rate') }}<input class="input" name="rate" inputmode="decimal" required></label>
@@ -101,7 +101,7 @@
 
 <section class="space-y-3">
   <h2 class="text-2xl font-extrabold">{{ t('par.book') }}</h2>
-  <form method="post" action="/eltern/buchen" class="card space-y-3">
+  <form method="post" action="/parent/book" class="card space-y-3">
     <p class="lesson">{{ t('par.book.hint') }}</p>
     <label class="block">{{ t('par.book.account') }}
       <select class="input" name="account_id">
@@ -132,11 +132,11 @@
     <div class="flex items-center gap-4">
       <span class="text-4xl">{{ r.kid.avatar }}</span>
       <span class="flex-1">{{ r.kid.name }}: {{ r.rule.amount_cents|money }} · {{ t('par.rule.' ~ r.rule.interval) }} · {{ t('wd.' ~ r.rule.next_run.weekday()) }}, {{ r.rule.next_run|date }}</span>
-      <form method="post" action="/eltern/dauerauftrag/{{ r.rule.id }}/loeschen"><button class="btn btn-alt">{{ t('par.rule.delete') }}</button></form>
+      <form method="post" action="/parent/rules/{{ r.rule.id }}/delete"><button class="btn btn-alt">{{ t('par.rule.delete') }}</button></form>
     </div>
     <details>
       <summary class="cursor-pointer font-bold">{{ t('par.rule.edit') }}</summary>
-      <form method="post" action="/eltern/dauerauftrag/{{ r.rule.id }}" class="rule-form mt-3 space-y-3">
+      <form method="post" action="/parent/rules/{{ r.rule.id }}" class="rule-form mt-3 space-y-3">
         <label class="block">{{ t('par.rule.amount') }}<input class="input" name="amount" inputmode="decimal" required value="{{ r.rule.amount_cents|plain }}"></label>
         {{ rule_fields(r.rule.interval, r.rule.next_run.weekday(), r.rule.next_run.day) }}
         <button class="btn">{{ t('par.rule.save') }}</button>
@@ -146,7 +146,7 @@
   {% endfor %}
   <details>
   <summary class="btn btn-alt cursor-pointer">{{ t('par.rule.add') }}</summary>
-  <form method="post" action="/eltern/dauerauftrag" class="rule-form card mt-3 space-y-3">
+  <form method="post" action="/parent/rules" class="rule-form card mt-3 space-y-3">
     <label class="block">{{ t('par.rule.kid') }}
       <select class="input" name="kid_id">{% for k in kids %}<option value="{{ k.id }}">{{ k.avatar }} {{ k.name }}</option>{% endfor %}</select>
     </label>

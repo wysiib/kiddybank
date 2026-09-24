@@ -49,9 +49,9 @@ def buy(s: Session, user_id: int, stock_id: int, shares: int, today: date) -> No
     if shares <= 0:
         raise LedgerError("err.amount")
     update_prices(s, today)
-    st, giro = s.get(Stock, stock_id), get_account(s, user_id, "giro")
+    st, checking = s.get(Stock, stock_id), get_account(s, user_id, "checking")
     cost = shares * st.current_price_cents
-    post(s, giro, None, cost, "aktienkauf", today, note=st.symbol)
+    post(s, checking, None, cost, "stock_buy", today, note=st.symbol)
     h = _holding(s, user_id, stock_id)
     if h:
         h.avg_buy_price_cents = (h.shares * h.avg_buy_price_cents + cost) // (h.shares + shares)
@@ -68,8 +68,8 @@ def sell(s: Session, user_id: int, stock_id: int, shares: int, today: date) -> N
     if not h or h.shares < shares:
         raise LedgerError("err.no_shares")
     update_prices(s, today)
-    st, giro = s.get(Stock, stock_id), get_account(s, user_id, "giro")
-    post(s, None, giro, shares * st.current_price_cents, "aktienverkauf", today, note=st.symbol)
+    st, checking = s.get(Stock, stock_id), get_account(s, user_id, "checking")
+    post(s, None, checking, shares * st.current_price_cents, "stock_sell", today, note=st.symbol)
     h.shares -= shares
     if h.shares == 0:
         s.delete(h)

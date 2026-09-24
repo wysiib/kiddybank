@@ -1,18 +1,18 @@
 {% extends "base.html" %}
 {% from "_stepper.html" import stepper %}
 {% from "_keypad.html" import keypad %}
-{% from "_giro.html" import giro_card %}
+{% from "_checking.html" import checking_card %}
 {% from "_coins.html" import stack %}
 {% block content %}
-{% set out = kind == 'abheben' %}
+{% set out = kind == 'withdraw' %}
 {% set key = 'out' if out else 'in' %}
 {% if error %}<p class="error">{{ t(error) }}</p>{% endif %}
 {% if gap %}{% include "_short.html" %}{% endif %}
 {% if not cents %}
 <h1 class="text-3xl font-extrabold">{{ '📤' if out else '📥' }} {{ t('cash.' ~ key ~ '.title') }}</h1>
-{{ giro_card(giro) }}
+{{ checking_card(checking) }}
 <p class="lesson">{{ t('cash.' ~ key ~ '.intro') }}</p>
-<form method="post" action="/bar/{{ kind }}/pruefen" class="space-y-6">
+<form method="post" action="/cash/{{ kind }}/check" class="space-y-6">
   {{ stepper() }}
   {% if not out %}
   <label class="block">{{ t('cash.sender') }}<input class="input" name="note" maxlength="40" value="{{ note }}"></label>
@@ -37,16 +37,16 @@
   <p class="text-sm text-slate-500">{{ t('coin.unit', amount=pic.unit|compact) }}{% if out and lost %} · {{ t('coin.unit.small', amount=pic.small|compact) }}{% endif %}</p>
   <p class="lesson">{{ t('cash.' ~ key ~ '.lesson') }}</p>
   {% if out %}
-  <p class="lesson">{{ t('cash.out.interest', amount=cents|money, lost=lost|money, per=t('per.' ~ giro.payout_days)) if lost else t('cash.out.interest.plain') }}</p>
+  <p class="lesson">{{ t('cash.out.interest', amount=cents|money, lost=lost|money, per=t('per.' ~ checking.payout_days)) if lost else t('cash.out.interest.plain') }}</p>
   {% endif %}
 </div>
-<form method="post" action="/bar/{{ kind }}" class="space-y-6">
+<form method="post" action="/cash/{{ kind }}" class="space-y-6">
   <input type="hidden" name="cents" value="{{ cents }}">
   <input type="hidden" name="tok" value="{{ tok }}">
   <input type="hidden" name="note" value="{{ note }}">
   <input type="hidden" name="pin" value="">
   <p class="text-center font-bold">{{ t('cash.pin') }}</p>
-  {{ keypad('/bar/' ~ kind, shake=error) }}
+  {{ keypad('/cash/' ~ kind, shake=error) }}
 </form>
 {% endif %}
 {% endblock %}

@@ -19,5 +19,5 @@
 {% else %}
 <p class="lesson">{{ t('stmt.empty') }}</p>
 {% endfor %}
-<a href="{{ '/eltern' if who else '/home' }}" class="btn btn-alt">↩️ {{ t('app.back') }}</a>
+<a href="{{ '/parent' if who else '/home' }}" class="btn btn-alt">↩️ {{ t('app.back') }}</a>
 {% endblock %}

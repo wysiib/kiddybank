@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 {% from "_stepper.html" import stepper %}
-{% from "_giro.html" import giro_card %}
+{% from "_checking.html" import checking_card %}
 {% block content %}
 <h1 class="text-3xl font-extrabold">💸 {{ t('xfer.title') }}</h1>
-{{ giro_card(giro) }}
+{{ checking_card(checking) }}
 {% if error %}<p class="error">{{ t(error) }}</p>{% endif %}
 {% if gap %}{% include "_short.html" %}{% endif %}
-<form method="post" action="/ueberweisen/pruefen" class="space-y-6">
+<form method="post" action="/transfer/check" class="space-y-6">
   <section class="space-y-3">
     <h2 class="font-bold">{{ t('xfer.to') }}</h2>
     <div class="grid grid-cols-3 gap-3">
