@@ -81,7 +81,7 @@ def _describe(s: Session, acc: Account, tx, delta: int) -> tuple[str, str]:
         return "🧰", t("tx.festgeld.in" if inbound else "tx.festgeld.out")
     other_id = tx.from_account_id if inbound else tx.to_account_id
     if other_id is None:
-        return "👪", t("tx.parent.in" if inbound else "tx.parent.out")
+        return "👪", tx.note if tx.note else t("tx.parent.in" if inbound else "tx.parent.out")
     name = s.get(User, s.get(Account, other_id).user_id).name
     return "💸", t("tx.transfer.in" if inbound else "tx.transfer.out", name=name)
 
@@ -161,7 +161,7 @@ CASH = ("einzahlen", "abheben")
 
 
 def _cash_page(request: Request, s: Session, user: User, kind: str, cents: int | None = None, error: str | None = None,
-               gap: dict | None = None):
+               gap: dict | None = None, note: str = ""):
     if kind not in CASH:
         raise HTTPException(404)
     giro = ledger.get_account(s, user.id, "giro")
@@ -181,7 +181,7 @@ def _cash_page(request: Request, s: Session, user: User, kind: str, cents: int |
             pic["unit"] = coins.coin_unit([pic["after"]])
             pic["have"], pic["come"] = coins.split(pic["after"], cents, pic["unit"])
     return render(request, "cash.html", user=user, giro=giro, kind=kind, cents=cents, pic=pic,
-                  lost=lost, error=error, gap=gap, tok=issue_token(request, "cash") if cents else None)
+                  lost=lost, error=error, gap=gap, note=note, tok=issue_token(request, "cash") if cents else None)
 
 
 @router.get("/bar/{kind}")
@@ -190,20 +190,20 @@ def cash_form(request: Request, kind: str, user: User = Depends(kid), s: Session
 
 
 @router.post("/bar/{kind}/pruefen")
-def cash_check(request: Request, kind: str, cents: int = Form(0), user: User = Depends(kid),
+def cash_check(request: Request, kind: str, cents: int = Form(0), note: str = Form(""), user: User = Depends(kid),
                s: Session = db):
     giro = ledger.get_account(s, user.id, "giro")
     if cents <= 0:
-        return _cash_page(request, s, user, kind, error="err.amount")
+        return _cash_page(request, s, user, kind, error="err.amount", note=note)
     if kind == "abheben" and cents > giro.balance_cents:
         return _cash_page(request, s, user, kind, error="err.insufficient",
-                          gap=coins.shortfall(giro.balance_cents, cents))
-    return _cash_page(request, s, user, kind, cents)
+                          gap=coins.shortfall(giro.balance_cents, cents), note=note)
+    return _cash_page(request, s, user, kind, cents, note=note)
 
 
 @router.post("/bar/{kind}")
 def cash_do(request: Request, kind: str, cents: int = Form(...), pin: str = Form(...), tok: str = Form(""),
-            user: User = Depends(kid),
+            note: str = Form(""), user: User = Depends(kid),
             s: Session = db, today: date = Depends(get_today)):
     giro = ledger.get_account(s, user.id, "giro")
     parents = s.exec(select(User).where(User.role == "parent")).all()
@@ -212,16 +212,16 @@ def cash_do(request: Request, kind: str, cents: int = Form(...), pin: str = Form
             raise LedgerError("err.amount")
         ledger.check_amount(cents)  # a negative amount would flip the direction of the booking
         if auth.locked(user):
-            return _cash_page(request, s, user, kind, cents, "err.locked")
+            return _cash_page(request, s, user, kind, cents, "err.locked", note=note)
         if not any(verify_pin(pin, p.pin_hash) for p in parents):
             auth.pin_failed(user)
-            return _cash_page(request, s, user, kind, cents, "cash.pin.wrong")
+            return _cash_page(request, s, user, kind, cents, "cash.pin.wrong", note=note)
         auth.pin_ok(user)
         if not use_token(request, "cash", tok):  # a double tap: the first request already did it
             return redirect("/home")
-        ledger.manual_booking(s, giro, cents if kind == "einzahlen" else -cents, today)
+        ledger.manual_booking(s, giro, cents if kind == "einzahlen" else -cents, today, note.strip())
     except LedgerError as e:
-        return _cash_page(request, s, user, kind if kind in CASH else "einzahlen", cents, e.args[0])
+        return _cash_page(request, s, user, kind if kind in CASH else "einzahlen", cents, e.args[0], note=note)
     key = "in" if kind == "einzahlen" else "out"
     return render(request, "done.html", user=user, emoji="📥" if key == "in" else "📤", msg=t(f"cash.{key}.done"),
                   lesson=t(f"cash.{key}.lesson"))

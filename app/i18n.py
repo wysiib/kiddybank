@@ -99,6 +99,7 @@ STRINGS = {
         "cash.pin.wrong": "Das war nicht der Code von den Eltern.",
         "cash.in.done": "Eingezahlt! Dein Geld liegt jetzt auf dem Konto.",
         "cash.out.done": "Abgehoben! Du hast dein Geld bekommen.",
+        "cash.sender": "Von wem / wofür? (optional)",
 
         # festgeld
         "fg.title": "Schatztruhe",

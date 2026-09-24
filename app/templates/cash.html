@@ -14,6 +14,9 @@
 <p class="lesson">{{ t('cash.' ~ key ~ '.intro') }}</p>
 <form method="post" action="/bar/{{ kind }}/pruefen" class="space-y-6">
   {{ stepper() }}
+  {% if not out %}
+  <label class="block">{{ t('cash.sender') }}<input class="input" name="note" maxlength="40" value="{{ note }}"></label>
+  {% endif %}
   <button class="btn w-full">{{ t('app.next') }} ➡️</button>
 </form>
 {% else %}
@@ -40,6 +43,7 @@
 <form method="post" action="/bar/{{ kind }}" class="space-y-6">
   <input type="hidden" name="cents" value="{{ cents }}">
   <input type="hidden" name="tok" value="{{ tok }}">
+  <input type="hidden" name="note" value="{{ note }}">
   <input type="hidden" name="pin" value="">
   <p class="text-center font-bold">{{ t('cash.pin') }}</p>
   {{ keypad('/bar/' ~ kind, shake=error) }}
