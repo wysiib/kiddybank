@@ -16,6 +16,7 @@
   {{ stepper() }}
   {% if not out %}
   <label class="block">{{ t('cash.sender') }}<input class="input" name="note" maxlength="40" value="{{ note }}"></label>
+  <p class="text-sm text-slate-500">{{ t('cash.sender.hint', default=t('tx.parent.in')) }}</p>
   {% endif %}
   <button class="btn w-full">{{ t('app.next') }} ➡️</button>
 </form>

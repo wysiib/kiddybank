@@ -100,6 +100,7 @@ STRINGS = {
         "cash.in.done": "Eingezahlt! Dein Geld liegt jetzt auf dem Konto.",
         "cash.out.done": "Abgehoben! Du hast dein Geld bekommen.",
         "cash.sender": "Von wem / wofür? (optional)",
+        "cash.sender.hint": "Wenn du nichts einträgst, steht im Kontoauszug: „{default}“.",
 
         # festgeld
         "td.title": "Schatztruhe",
